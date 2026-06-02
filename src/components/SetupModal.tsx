@@ -2,6 +2,7 @@ import { useState } from 'react';
 import {
   X,
   GitFork,
+  Import,
   Key,
   ChevronRight,
   ChevronLeft,
@@ -98,7 +99,7 @@ export default function SetupModal({ open, onClose }: SetupModalProps) {
               1
             </span>
             <GitFork size={15} />
-            Fork & Import
+            Fork
           </button>
           <button
             onClick={() => setStep(2)}
@@ -117,6 +118,26 @@ export default function SetupModal({ open, onClose }: SetupModalProps) {
             >
               2
             </span>
+            <Import size={15} />
+            Import
+          </button>
+          <button
+            onClick={() => setStep(3)}
+            className={`flex items-center gap-2.5 px-4 py-3 text-sm font-medium transition-colors border-b-2 -mb-px ${
+              step === 3
+                ? 'text-teal-300 border-teal-400'
+                : 'text-slate-400 border-transparent hover:text-slate-200'
+            }`}
+          >
+            <span
+              className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
+                step === 3
+                  ? 'bg-teal-500 text-white'
+                  : 'bg-slate-700 text-slate-300'
+              }`}
+            >
+              3
+            </span>
             <Key size={15} />
             Add API Keys
           </button>
@@ -124,7 +145,9 @@ export default function SetupModal({ open, onClose }: SetupModalProps) {
 
         {/* Step content */}
         <div className="px-7 py-6 max-h-[60vh] overflow-y-auto">
-          {step === 1 ? <StepOne /> : <StepTwo copiedKey={copiedKey} onCopy={handleCopy} />}
+          {step === 1 && <StepFork />}
+          {step === 2 && <StepImport />}
+          {step === 3 && <StepKeys copiedKey={copiedKey} onCopy={handleCopy} />}
         </div>
 
         {/* Footer */}
@@ -136,6 +159,23 @@ export default function SetupModal({ open, onClose }: SetupModalProps) {
                 onClick={() => setStep(2)}
                 className="flex items-center gap-2 px-5 py-2.5 bg-teal-600 hover:bg-teal-500 text-white text-sm font-medium rounded-lg transition-colors"
               >
+                Next: Import
+                <ChevronRight size={16} />
+              </button>
+            </>
+          ) : step === 2 ? (
+            <>
+              <button
+                onClick={() => setStep(1)}
+                className="flex items-center gap-1.5 text-sm text-slate-400 hover:text-white transition-colors"
+              >
+                <ChevronLeft size={16} />
+                Back
+              </button>
+              <button
+                onClick={() => setStep(3)}
+                className="flex items-center gap-2 px-5 py-2.5 bg-teal-600 hover:bg-teal-500 text-white text-sm font-medium rounded-lg transition-colors"
+              >
                 Next: API Keys
                 <ChevronRight size={16} />
               </button>
@@ -143,11 +183,11 @@ export default function SetupModal({ open, onClose }: SetupModalProps) {
           ) : (
             <>
               <button
-                onClick={() => setStep(1)}
+                onClick={() => setStep(2)}
                 className="flex items-center gap-1.5 text-sm text-slate-400 hover:text-white transition-colors"
               >
                 <ChevronLeft size={16} />
-                Back to Step 1
+                Back
               </button>
               <button
                 onClick={handleDone}
@@ -164,12 +204,12 @@ export default function SetupModal({ open, onClose }: SetupModalProps) {
   );
 }
 
-function StepOne() {
+function StepFork() {
   return (
     <div className="space-y-4">
       <div className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-5">
         <p className="text-sm font-medium text-slate-200 mb-4">
-          How to get your own copy of this project:
+          Fork the repository to your own GitHub account:
         </p>
         <ol className="space-y-3">
           <li className="flex items-start gap-3">
@@ -177,8 +217,7 @@ function StepOne() {
               1
             </span>
             <p className="text-sm text-slate-300 leading-relaxed">
-              Fork the GitHub repository to your own account by visiting the link
-              below and clicking <strong className="text-white">"Fork"</strong>.
+              Visit the repository link below.
             </p>
           </li>
           <li className="pl-9 -mt-1">
@@ -197,6 +236,46 @@ function StepOne() {
               2
             </span>
             <p className="text-sm text-slate-300 leading-relaxed">
+              Click the <strong className="text-white">"Fork"</strong> button in
+              the top-right area of the page (shown below).
+            </p>
+          </li>
+          <li className="flex items-start gap-3">
+            <span className="w-6 h-6 rounded-full bg-teal-600/20 text-teal-300 flex items-center justify-center text-xs font-bold shrink-0 mt-0.5">
+              3
+            </span>
+            <p className="text-sm text-slate-300 leading-relaxed">
+              Confirm the fork. This creates a copy of the repository under your
+              GitHub account.
+            </p>
+          </li>
+        </ol>
+      </div>
+
+      <div className="rounded-xl overflow-hidden border border-slate-700/50">
+        <img
+          src="/fork_button.png"
+          alt="GitHub repository page showing the Fork button highlighted"
+          className="w-full h-auto object-contain"
+        />
+      </div>
+    </div>
+  );
+}
+
+function StepImport() {
+  return (
+    <div className="space-y-4">
+      <div className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-5">
+        <p className="text-sm font-medium text-slate-200 mb-4">
+          Import your forked repository into Bolt:
+        </p>
+        <ol className="space-y-3">
+          <li className="flex items-start gap-3">
+            <span className="w-6 h-6 rounded-full bg-teal-600/20 text-teal-300 flex items-center justify-center text-xs font-bold shrink-0 mt-0.5">
+              1
+            </span>
+            <p className="text-sm text-slate-300 leading-relaxed">
               Go to{' '}
               <a
                 href="https://bolt.new"
@@ -206,9 +285,16 @@ function StepOne() {
               >
                 bolt.new
               </a>{' '}
-              and click the{' '}
-              <strong className="text-white">"GitHub"</strong> button at the bottom
-              of the prompt area (shown below).
+              and look at the bottom of the prompt area.
+            </p>
+          </li>
+          <li className="flex items-start gap-3">
+            <span className="w-6 h-6 rounded-full bg-teal-600/20 text-teal-300 flex items-center justify-center text-xs font-bold shrink-0 mt-0.5">
+              2
+            </span>
+            <p className="text-sm text-slate-300 leading-relaxed">
+              Click the <strong className="text-white">"GitHub"</strong> button
+              (shown below).
             </p>
           </li>
           <li className="flex items-start gap-3">
@@ -217,7 +303,7 @@ function StepOne() {
             </span>
             <p className="text-sm text-slate-300 leading-relaxed">
               Select your forked repository from the list. Bolt will create a new
-              project from it under your account with all the files ready to go.
+              project with all the files ready to go.
             </p>
           </li>
         </ol>
@@ -227,20 +313,20 @@ function StepOne() {
         <img
           src="/Github_button.png"
           alt="Bolt home page showing the GitHub button at the bottom of the prompt area"
-          className="w-full h-auto"
+          className="w-full h-auto object-contain"
         />
       </div>
 
       <p className="text-xs text-slate-500 leading-relaxed">
         After importing, your new project will open with all files, database
         tables, and edge functions already set up. You just need to add your own
-        API keys (Step 2).
+        API keys (Step 3).
       </p>
     </div>
   );
 }
 
-function StepTwo({
+function StepKeys({
   copiedKey,
   onCopy,
 }: {
