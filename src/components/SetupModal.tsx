@@ -98,7 +98,7 @@ export default function SetupModal({ open, onClose }: SetupModalProps) {
               1
             </span>
             <GitFork size={15} />
-            Duplicate Project
+            Fork & Import
           </button>
           <button
             onClick={() => setStep(2)}
@@ -166,58 +166,76 @@ export default function SetupModal({ open, onClose }: SetupModalProps) {
 
 function StepOne() {
   return (
-    <div className="flex gap-6">
-      <div className="flex-1 min-w-0 space-y-4">
-        <div className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-5">
-          <p className="text-sm font-medium text-slate-200 mb-4">
-            How to duplicate this project:
-          </p>
-          <ol className="space-y-3">
-            <li className="flex items-start gap-3">
-              <span className="w-6 h-6 rounded-full bg-teal-600/20 text-teal-300 flex items-center justify-center text-xs font-bold shrink-0 mt-0.5">
-                1
-              </span>
-              <p className="text-sm text-slate-300 leading-relaxed">
-                Click the <strong className="text-white">drop-down arrow</strong> next
-                to the project name in the{' '}
-                <strong className="text-white">top-left corner</strong> of the page.
-              </p>
-            </li>
-            <li className="flex items-start gap-3">
-              <span className="w-6 h-6 rounded-full bg-teal-600/20 text-teal-300 flex items-center justify-center text-xs font-bold shrink-0 mt-0.5">
-                2
-              </span>
-              <p className="text-sm text-slate-300 leading-relaxed">
-                Select <strong className="text-white">"Duplicate"</strong> from the
-                menu that appears.
-              </p>
-            </li>
-            <li className="flex items-start gap-3">
-              <span className="w-6 h-6 rounded-full bg-teal-600/20 text-teal-300 flex items-center justify-center text-xs font-bold shrink-0 mt-0.5">
-                3
-              </span>
-              <p className="text-sm text-slate-300 leading-relaxed">
-                A new copy of the project will be created under your account. You can
-                then make changes without affecting the original.
-              </p>
-            </li>
-          </ol>
-        </div>
-
-        <p className="text-xs text-slate-500 leading-relaxed">
-          After duplicating, the new project will open with all files, database
-          tables, and edge functions already set up. You just need to add your own
-          API keys (Step 2).
+    <div className="space-y-4">
+      <div className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-5">
+        <p className="text-sm font-medium text-slate-200 mb-4">
+          How to get your own copy of this project:
         </p>
+        <ol className="space-y-3">
+          <li className="flex items-start gap-3">
+            <span className="w-6 h-6 rounded-full bg-teal-600/20 text-teal-300 flex items-center justify-center text-xs font-bold shrink-0 mt-0.5">
+              1
+            </span>
+            <p className="text-sm text-slate-300 leading-relaxed">
+              Fork the GitHub repository to your own account by visiting the link
+              below and clicking <strong className="text-white">"Fork"</strong>.
+            </p>
+          </li>
+          <li className="pl-9 -mt-1">
+            <a
+              href="https://github.com/wsayer1/AI-Social-Post-Generator"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 text-sm text-teal-400 hover:text-teal-300 font-medium transition-colors"
+            >
+              github.com/wsayer1/AI-Social-Post-Generator
+              <ExternalLink size={13} />
+            </a>
+          </li>
+          <li className="flex items-start gap-3">
+            <span className="w-6 h-6 rounded-full bg-teal-600/20 text-teal-300 flex items-center justify-center text-xs font-bold shrink-0 mt-0.5">
+              2
+            </span>
+            <p className="text-sm text-slate-300 leading-relaxed">
+              Go to{' '}
+              <a
+                href="https://bolt.new"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-teal-400 hover:text-teal-300 font-medium transition-colors"
+              >
+                bolt.new
+              </a>{' '}
+              and click the{' '}
+              <strong className="text-white">"GitHub"</strong> button at the bottom
+              of the prompt area (shown below).
+            </p>
+          </li>
+          <li className="flex items-start gap-3">
+            <span className="w-6 h-6 rounded-full bg-teal-600/20 text-teal-300 flex items-center justify-center text-xs font-bold shrink-0 mt-0.5">
+              3
+            </span>
+            <p className="text-sm text-slate-300 leading-relaxed">
+              Select your forked repository from the list. Bolt will create a new
+              project from it under your account with all the files ready to go.
+            </p>
+          </li>
+        </ol>
       </div>
 
-      <div className="w-64 shrink-0 rounded-xl overflow-hidden border border-slate-700/50 self-start">
+      <div className="rounded-xl overflow-hidden border border-slate-700/50">
         <img
-          src="/Screenshot_2026-05-21_at_5.27.01_PM.png"
-          alt="Screenshot showing the drop-down menu with the Duplicate option highlighted"
+          src="/Github_button.png"
+          alt="Bolt home page showing the GitHub button at the bottom of the prompt area"
           className="w-full h-auto"
         />
       </div>
+
+      <p className="text-xs text-slate-500 leading-relaxed">
+        After importing, your new project will open with all files, database
+        tables, and edge functions already set up. You just need to add your own
+        API keys (Step 2).
+      </p>
     </div>
   );
 }
@@ -241,7 +259,7 @@ function StepTwo({
               1
             </span>
             <p className="text-sm text-slate-300 leading-relaxed">
-              In your duplicated project, open{' '}
+              In your new project, open{' '}
               <strong className="text-white">Settings</strong> and navigate to the{' '}
               <strong className="text-white">Secrets</strong> section.
             </p>
