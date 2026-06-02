@@ -1,0 +1,520 @@
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Trash2, FlaskConical, X, ExternalLink, PenTool, Loader2, Clock, Brain, ArrowRight } from 'lucide-react';
+import { supabase, supabaseConfigured, supabaseUrl, supabaseAnonKey } from '../lib/supabase';
+
+interface ResearchTopic {
+  id: string;
+  question: string;
+  career: string;
+  industry: string;
+  status: string;
+  findings: { summary?: string; sources?: { title: string; url: string }[] } | null;
+  gemini_interaction_id: string | null;
+  created_at: string;
+}
+
+const statusColors: Record<string, string> = {
+  Pending: 'bg-amber-50 text-amber-700 border-amber-200',
+  'In Progress': 'bg-blue-50 text-blue-700 border-blue-200',
+  Complete: 'bg-green-50 text-green-700 border-green-200',
+};
+
+const POLL_INTERVAL = 12000;
+
+export default function Research() {
+  const navigate = useNavigate();
+  const [topics, setTopics] = useState<ResearchTopic[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedTopic, setSelectedTopic] = useState<ResearchTopic | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [startingId, setStartingId] = useState<string | null>(null);
+  const [pollingIds, setPollingIds] = useState<Set<string>>(new Set());
+  const [thinkingSummaries, setThinkingSummaries] = useState<Record<string, string>>({});
+  const [error, setError] = useState('');
+  const pollTimers = useRef<Record<string, ReturnType<typeof setInterval>>>({});
+
+  useEffect(() => {
+    fetchTopics();
+    return () => {
+      Object.values(pollTimers.current).forEach(clearInterval);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (topics.length > 0) {
+      topics.forEach((t) => {
+        if (t.status === 'In Progress' && t.gemini_interaction_id && !pollTimers.current[t.id]) {
+          startPolling(t.id);
+        }
+      });
+    }
+  }, [topics]);
+
+  async function fetchTopics() {
+    if (!supabaseConfigured) {
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    const { data, error: fetchErr } = await supabase
+      .from('research_topics')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (!fetchErr && data) setTopics(data);
+    setLoading(false);
+  }
+
+  async function handleDelete(id: string) {
+    if (!supabaseConfigured) return;
+    setDeletingId(id);
+    stopPolling(id);
+    const { error: delErr } = await supabase.from('research_topics').delete().eq('id', id);
+    if (!delErr) {
+      setTopics((prev) => prev.filter((t) => t.id !== id));
+      if (selectedTopic?.id === id) setSelectedTopic(null);
+    }
+    setDeletingId(null);
+  }
+
+  function stopPolling(id: string) {
+    if (pollTimers.current[id]) {
+      clearInterval(pollTimers.current[id]);
+      delete pollTimers.current[id];
+    }
+    setPollingIds((prev) => {
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
+  }
+
+  const pollForResults = useCallback(async (id: string) => {
+    try {
+      const apiUrl = `${supabaseUrl}/functions/v1/conduct-research`;
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${supabaseAnonKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ topicId: id, action: 'poll' }),
+      });
+
+      if (!response.ok) return;
+
+      const data = await response.json();
+
+      if (data.thinkingSummary) {
+        setThinkingSummaries((prev) => ({ ...prev, [id]: data.thinkingSummary }));
+      }
+
+      if (data.status === 'completed' && data.topic) {
+        stopPolling(id);
+        setTopics((prev) => prev.map((t) => (t.id === id ? data.topic : t)));
+        setSelectedTopic((prev) => (prev?.id === id ? data.topic : prev));
+        setThinkingSummaries((prev) => {
+          const next = { ...prev };
+          delete next[id];
+          return next;
+        });
+      } else if (data.status === 'failed') {
+        stopPolling(id);
+        setError(data.error || 'Research failed');
+        setTopics((prev) =>
+          prev.map((t) =>
+            t.id === id ? { ...t, status: 'Pending', gemini_interaction_id: null } : t
+          )
+        );
+        setSelectedTopic((prev) =>
+          prev?.id === id ? { ...prev, status: 'Pending', gemini_interaction_id: null } : prev
+        );
+      }
+    } catch {
+      // Network error during poll -- will retry on next interval
+    }
+  }, []);
+
+  function startPolling(id: string) {
+    if (pollTimers.current[id]) return;
+    setPollingIds((prev) => new Set(prev).add(id));
+    pollTimers.current[id] = setInterval(() => pollForResults(id), POLL_INTERVAL);
+    pollForResults(id);
+  }
+
+  async function handleConductResearch(id: string) {
+    if (!supabaseConfigured) return;
+    setStartingId(id);
+    setError('');
+
+    setTopics((prev) =>
+      prev.map((t) => (t.id === id ? { ...t, status: 'In Progress' } : t))
+    );
+    if (selectedTopic?.id === id) {
+      setSelectedTopic((prev) => (prev ? { ...prev, status: 'In Progress' } : prev));
+    }
+
+    try {
+      const apiUrl = `${supabaseUrl}/functions/v1/conduct-research`;
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${supabaseAnonKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ topicId: id, action: 'start' }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Failed to start research');
+      }
+
+      const data = await response.json();
+      if (data.status === 'started') {
+        setTopics((prev) =>
+          prev.map((t) =>
+            t.id === id
+              ? { ...t, status: 'In Progress', gemini_interaction_id: data.interactionId }
+              : t
+          )
+        );
+        startPolling(id);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Research failed to start');
+      setTopics((prev) =>
+        prev.map((t) => (t.id === id ? { ...t, status: 'Pending' } : t))
+      );
+      if (selectedTopic?.id === id) {
+        setSelectedTopic((prev) => (prev ? { ...prev, status: 'Pending' } : prev));
+      }
+    } finally {
+      setStartingId(null);
+    }
+  }
+
+  function handleDraftPost(topic: ResearchTopic) {
+    navigate('/posts', { state: { researchTopic: topic } });
+  }
+
+  function isResearching(id: string) {
+    return startingId === id || pollingIds.has(id);
+  }
+
+  if (loading) {
+    return (
+      <div className="p-8 flex items-center justify-center min-h-[50vh]">
+        <Loader2 size={24} className="animate-spin text-teal-600" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="p-8 max-w-5xl mx-auto">
+      <div className="mb-8">
+        <h1 className="text-2xl font-bold text-slate-900">Research</h1>
+        <p className="text-slate-500 mt-1">
+          Manage your research topics. Click a card to view details.
+        </p>
+      </div>
+
+      {error && (
+        <div className="mb-6 bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3 flex items-center justify-between">
+          <span>{error}</span>
+          <button onClick={() => setError('')} className="text-red-400 hover:text-red-600 ml-3">
+            <X size={14} />
+          </button>
+        </div>
+      )}
+
+      {topics.length === 0 ? (
+        <div className="bg-white rounded-xl border border-slate-200 p-12 text-center">
+          <FlaskConical size={40} className="mx-auto text-slate-300 mb-3" />
+          <p className="text-slate-500 text-sm">
+            No research topics yet. Head to{' '}
+            <button
+              onClick={() => navigate('/topics')}
+              className="text-teal-600 hover:underline font-medium"
+            >
+              Topic Choice
+            </button>{' '}
+            to generate questions.
+          </p>
+        </div>
+      ) : (
+        <div className="grid gap-4 sm:grid-cols-2">
+          {topics.map((topic) => {
+            const researching = isResearching(topic.id);
+            const isComplete = topic.status === 'Complete';
+            const thinking = thinkingSummaries[topic.id];
+            return (
+              <div
+                key={topic.id}
+                onClick={() => setSelectedTopic(topic)}
+                className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm hover:shadow-md hover:border-slate-300 transition-all cursor-pointer group"
+              >
+                <div className="flex items-start justify-between gap-3 mb-3">
+                  <span
+                    className={`inline-block text-xs font-medium px-2 py-0.5 rounded-full border ${
+                      statusColors[topic.status] || statusColors.Pending
+                    }`}
+                  >
+                    {topic.status}
+                  </span>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDelete(topic.id);
+                    }}
+                    disabled={deletingId === topic.id}
+                    className="text-slate-400 hover:text-red-500 transition-colors p-1 rounded"
+                    title="Delete topic"
+                  >
+                    {deletingId === topic.id ? (
+                      <Loader2 size={14} className="animate-spin" />
+                    ) : (
+                      <Trash2 size={14} />
+                    )}
+                  </button>
+                </div>
+                <p className="text-sm text-slate-800 leading-relaxed line-clamp-3">
+                  {topic.question}
+                </p>
+
+                {researching && thinking && (
+                  <div className="mt-3 flex items-start gap-2 bg-blue-50/60 rounded-lg px-3 py-2">
+                    <Brain size={12} className="text-blue-500 mt-0.5 shrink-0" />
+                    <p className="text-xs text-blue-600 line-clamp-2">{thinking}</p>
+                  </div>
+                )}
+
+                <div className="mt-4 flex items-center gap-2">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (!researching && !isComplete) handleConductResearch(topic.id);
+                    }}
+                    disabled={researching || isComplete}
+                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                      isComplete
+                        ? 'bg-green-50 text-green-700 border border-green-200'
+                        : researching
+                        ? 'bg-blue-50 text-blue-700 border border-blue-200'
+                        : 'bg-slate-100 text-slate-600 border border-slate-200 hover:bg-teal-50 hover:text-teal-700 hover:border-teal-200'
+                    }`}
+                  >
+                    {isComplete ? (
+                      <>
+                        <FlaskConical size={12} />
+                        Research Complete
+                      </>
+                    ) : researching ? (
+                      <>
+                        <Loader2 size={12} className="animate-spin" />
+                        Researching...
+                      </>
+                    ) : (
+                      <>
+                        <FlaskConical size={12} />
+                        Conduct Research
+                      </>
+                    )}
+                  </button>
+                  {isComplete && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDraftPost(topic);
+                      }}
+                      className="ml-auto inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md border border-teal-200 bg-teal-50 text-teal-700 hover:bg-teal-100 hover:border-teal-300 transition-colors"
+                    >
+                      <PenTool size={12} />
+                      Add to Post Generator
+                      <ArrowRight size={12} />
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {selectedTopic && (
+        <DetailModal
+          topic={selectedTopic}
+          isResearching={isResearching(selectedTopic.id)}
+          thinkingSummary={thinkingSummaries[selectedTopic.id] || null}
+          onClose={() => setSelectedTopic(null)}
+          onConductResearch={() => handleConductResearch(selectedTopic.id)}
+          onDraftPost={() => handleDraftPost(selectedTopic)}
+        />
+      )}
+    </div>
+  );
+}
+
+function DetailModal({
+  topic,
+  isResearching,
+  thinkingSummary,
+  onClose,
+  onConductResearch,
+  onDraftPost,
+}: {
+  topic: ResearchTopic;
+  isResearching: boolean;
+  thinkingSummary: string | null;
+  onClose: () => void;
+  onConductResearch: () => void;
+  onDraftPost: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+      <div className="bg-white rounded-2xl shadow-xl max-w-2xl w-full max-h-[85vh] overflow-y-auto">
+        <div className="sticky top-0 bg-white border-b border-slate-100 px-6 py-4 flex items-center justify-between rounded-t-2xl z-10">
+          <span
+            className={`text-xs font-medium px-2 py-0.5 rounded-full border ${
+              statusColors[topic.status] || statusColors.Pending
+            }`}
+          >
+            {topic.status}
+          </span>
+          <button
+            onClick={onClose}
+            className="text-slate-400 hover:text-slate-600 transition-colors"
+          >
+            <X size={20} />
+          </button>
+        </div>
+
+        <div className="px-6 py-5 space-y-5">
+          <div>
+            <h2 className="text-lg font-semibold text-slate-900 leading-snug">
+              {topic.question}
+            </h2>
+            <p className="text-xs text-slate-400 mt-2">
+              {topic.career} &middot; {topic.industry}
+            </p>
+          </div>
+
+          <div className="border-t border-slate-100 pt-5">
+            <h3 className="text-sm font-semibold text-slate-700 mb-3">Research Findings</h3>
+            {isResearching ? (
+              <div className="bg-gradient-to-br from-blue-50 to-sky-50 border border-blue-200 rounded-xl p-6 space-y-4">
+                <div className="flex items-center justify-center gap-3">
+                  <div className="relative">
+                    <Loader2 size={22} className="animate-spin text-blue-600" />
+                    <div className="absolute inset-0 animate-ping opacity-20">
+                      <Loader2 size={22} className="text-blue-600" />
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-sm text-blue-800 font-semibold">Deep Research in Progress</p>
+                    <p className="text-xs text-blue-500 mt-0.5">
+                      Gemini is searching the web and analyzing sources
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 text-xs text-blue-500 justify-center">
+                  <Clock size={11} />
+                  <span>This typically takes 2 -- 10 minutes</span>
+                </div>
+
+                {thinkingSummary && (
+                  <div className="bg-white/70 rounded-lg px-4 py-3 border border-blue-100">
+                    <div className="flex items-center gap-1.5 text-xs font-medium text-blue-700 mb-1.5">
+                      <Brain size={11} />
+                      Latest Update
+                    </div>
+                    <p className="text-xs text-blue-600 leading-relaxed">{thinkingSummary}</p>
+                  </div>
+                )}
+
+                <div className="flex justify-center gap-1">
+                  {[0, 1, 2].map((i) => (
+                    <div
+                      key={i}
+                      className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce"
+                      style={{ animationDelay: `${i * 150}ms` }}
+                    />
+                  ))}
+                </div>
+              </div>
+            ) : topic.findings?.summary ? (
+              <div className="text-sm text-slate-600 leading-relaxed whitespace-pre-line max-h-[40vh] overflow-y-auto prose prose-sm prose-slate">
+                {topic.findings.summary}
+              </div>
+            ) : (
+              <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 text-center">
+                <p className="text-sm text-slate-400">
+                  No research conducted yet. Click "Conduct Research" to begin.
+                </p>
+              </div>
+            )}
+          </div>
+
+          {!isResearching && topic.findings?.sources && topic.findings.sources.length > 0 && (
+            <div>
+              <h3 className="text-sm font-semibold text-slate-700 mb-3">
+                Sources & Citations ({topic.findings.sources.length})
+              </h3>
+              <ul className="space-y-2 max-h-48 overflow-y-auto">
+                {topic.findings.sources.map((source, i) => (
+                  <li key={i} className="flex items-center gap-2 text-sm text-teal-700 hover:text-teal-800">
+                    <ExternalLink size={12} className="shrink-0" />
+                    <a
+                      href={source.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="hover:underline truncate"
+                    >
+                      {source.title}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {!isResearching && !topic.findings?.sources?.length && topic.status !== 'In Progress' && (
+            <div>
+              <h3 className="text-sm font-semibold text-slate-700 mb-3">Sources & Citations</h3>
+              <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 text-center">
+                <p className="text-sm text-slate-400">Sources will appear here after research.</p>
+              </div>
+            </div>
+          )}
+
+          <div className="border-t border-slate-100 pt-5 flex gap-3">
+            {topic.status !== 'Complete' && !isResearching && (
+              <button
+                onClick={onConductResearch}
+                className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
+              >
+                <FlaskConical size={14} />
+                Conduct Research
+              </button>
+            )}
+            <button
+              onClick={onDraftPost}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-teal-600 text-white text-sm font-medium rounded-lg hover:bg-teal-700 transition-colors shadow-sm"
+            >
+              <PenTool size={14} />
+              Draft a Post
+            </button>
+            <button
+              onClick={onClose}
+              className="px-4 py-2 text-sm font-medium text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

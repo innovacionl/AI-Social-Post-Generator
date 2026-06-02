@@ -1,0 +1,28 @@
+{
+  "mcpServers": {
+    "github": {
+      "enabled": true
+    },
+    "notion": {
+      "enabled": false
+    },
+    "granola": {
+      "enabled": false
+    },
+    "shadcn_ui": {
+      "enabled": true
+    },
+    "tella_tv": {
+      "enabled": false
+    },
+    "shaders": {
+      "enabled": true
+    },
+    "slack": {
+      "enabled": false
+    },
+    "jira": {
+      "enabled": false
+    }
+  }
+}
