@@ -60,7 +60,7 @@ export default function Research() {
   useEffect(() => {
     if (topics.length > 0) {
       topics.forEach((tp) => {
-        if (tp.status === 'In Progress' && tp.gemini_interaction_id && !pollTimers.current[tp.id]) {
+        if (tp.status === 'In Progress' && !pollTimers.current[tp.id]) {
           startPolling(tp.id);
         }
       });
@@ -200,15 +200,18 @@ export default function Research() {
       }
 
       const data = await response.json();
-      if (data.status === 'started') {
+      if (data.status === 'completed' && data.topic) {
+        // Synchronous path: research finished within the edge function call
+        setTopics((prev) => prev.map((tp) => (tp.id === id ? data.topic : tp)));
+        setSelectedTopic((prev) => (prev?.id === id ? data.topic : prev));
+      } else if (data.status === 'started') {
+        // Legacy polling path (kept for resilience)
         setTopics((prev) =>
-          prev.map((tp) =>
-            tp.id === id
-              ? { ...tp, status: 'In Progress', gemini_interaction_id: data.interactionId }
-              : tp
-          )
+          prev.map((tp) => (tp.id === id ? { ...tp, status: 'In Progress' } : tp))
         );
         startPolling(id);
+      } else if (data.status === 'failed') {
+        throw new Error(data.error || 'Research failed');
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Research failed to start');

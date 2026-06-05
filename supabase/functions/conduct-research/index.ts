@@ -40,19 +40,35 @@ Deno.serve(async (req: Request) => {
     if (fe || !topic) return respond({ error: "Topic not found" }, 404);
 
     if (action === "start") {
-      // Mark in-progress immediately so frontend can start polling
+      // Mark in-progress so the UI reflects it immediately
       await supabase.from("research_topics")
         .update({ status: "In Progress", gemini_interaction_id: null })
         .eq("id", topicId);
 
-      // Run the OpenRouter call in the background so this response returns fast
-      EdgeRuntime.waitUntil(runResearch(supabase, topic, apiKey, language));
+      // Call OpenRouter synchronously — waitUntil is unreliable in Supabase edge runtime
+      const { summary, error: researchError } = await runResearch(topic, apiKey, language);
 
-      return respond({ status: "started" });
+      if (researchError || !summary) {
+        await supabase.from("research_topics")
+          .update({ status: "Pending", gemini_interaction_id: null })
+          .eq("id", topicId);
+        return respond({ status: "failed", error: researchError || "Empty response from model" });
+      }
+
+      await supabase.from("research_topics").update({
+        status: "Complete",
+        findings: { summary, sources: [] },
+        gemini_interaction_id: null,
+      }).eq("id", topicId);
+
+      const { data: updated } = await supabase
+        .from("research_topics").select("*").eq("id", topicId).maybeSingle();
+
+      return respond({ status: "completed", topic: updated });
     }
 
     if (action === "poll") {
-      // Re-fetch latest DB state — no external API call needed
+      // Re-fetch latest DB state — handles the case where the user reloaded mid-research
       const { data: latest } = await supabase
         .from("research_topics").select("*").eq("id", topicId).maybeSingle();
 
@@ -62,15 +78,13 @@ Deno.serve(async (req: Request) => {
         return respond({ status: "completed", topic: latest });
       }
       if (latest.status === "Pending") {
-        // Was reset or research failed
         return respond({ status: "failed", error: "Research did not complete" });
       }
-      // Still "In Progress"
+      // Still "In Progress" (synchronous call still running)
       return respond({ status: "polling", researchStatus: "in_progress" });
     }
 
     if (action === "status") {
-      // Diagnostic: return full DB record
       return respond({ topic });
     }
 
@@ -80,8 +94,11 @@ Deno.serve(async (req: Request) => {
   }
 });
 
-// Runs in the background via waitUntil — updates DB when done
-async function runResearch(sb: any, topic: any, apiKey: string, language: string) {
+async function runResearch(
+  topic: any,
+  apiKey: string,
+  language: string
+): Promise<{ summary?: string; error?: string }> {
   const langName = languageNames[language] || "English";
 
   const systemPrompt = `You are an expert research analyst. Write a thorough, well-structured research report based on your knowledge up to your training cutoff.
@@ -111,9 +128,14 @@ Write a comprehensive research report (aim for 1500–2500 words) that gives thi
 Respond entirely in ${langName}.`;
 
   try {
+    // 120-second abort to stay well within the Supabase 150s edge function timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 120_000);
+
     // Model: openai/gpt-4o-mini — confirmed working, good quality for long-form research synthesis
     const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
+      signal: controller.signal,
       headers: {
         "Content-Type": "application/json",
         "Authorization": `Bearer ${apiKey}`,
@@ -128,34 +150,18 @@ Respond entirely in ${langName}.`;
       }),
     });
 
+    clearTimeout(timeoutId);
+
     if (!res.ok) {
       const err = await res.text();
-      console.error("OpenRouter error:", res.status, err);
-      await sb.from("research_topics")
-        .update({ status: "Pending", gemini_interaction_id: null })
-        .eq("id", topic.id);
-      return;
+      return { error: `OpenRouter ${res.status}: ${err}` };
     }
 
     const data = await res.json();
-    const summary = data.choices?.[0]?.message?.content?.trim() || "";
-
-    if (!summary) {
-      await sb.from("research_topics")
-        .update({ status: "Pending", gemini_interaction_id: null })
-        .eq("id", topic.id);
-      return;
-    }
-
-    await sb.from("research_topics").update({
-      status: "Complete",
-      findings: { summary, sources: [] },
-      gemini_interaction_id: null,
-    }).eq("id", topic.id);
-  } catch (err) {
-    console.error("Research background task failed:", err);
-    await sb.from("research_topics")
-      .update({ status: "Pending", gemini_interaction_id: null })
-      .eq("id", topic.id);
+    const summary = data.choices?.[0]?.message?.content?.trim();
+    if (!summary) return { error: "Model returned empty content" };
+    return { summary };
+  } catch (err: any) {
+    return { error: err?.name === "AbortError" ? "Request timed out" : String(err) };
   }
 }
