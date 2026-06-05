@@ -104,6 +104,14 @@ export interface Translations {
     detailConductButton: string;
     detailDraftButton: string;
     detailCloseButton: string;
+    checkNow: string;
+    checking: string;
+    resetResearch: string;
+    resetting: string;
+    runningFor: string;
+    lastChecked: string;
+    geminiStatusLabel: string;
+    rawStatusButton: string;
   };
   // PostGenerator
   postGenerator: {
@@ -281,6 +289,14 @@ const en: Translations = {
     detailConductButton: 'Conduct Research',
     detailDraftButton: 'Draft a Post',
     detailCloseButton: 'Close',
+    checkNow: 'Check Now',
+    checking: 'Checking...',
+    resetResearch: 'Reset',
+    resetting: 'Resetting...',
+    runningFor: 'Running for',
+    lastChecked: 'Last checked',
+    geminiStatusLabel: 'Gemini status',
+    rawStatusButton: 'Raw Status',
   },
   postGenerator: {
     title: 'Post Generator',
@@ -466,6 +482,14 @@ const nl: Translations = {
     detailConductButton: 'Onderzoek Uitvoeren',
     detailDraftButton: 'Bericht Opstellen',
     detailCloseButton: 'Sluiten',
+    checkNow: 'Nu Controleren',
+    checking: 'Controleren...',
+    resetResearch: 'Herstellen',
+    resetting: 'Herstellen...',
+    runningFor: 'Bezig voor',
+    lastChecked: 'Laatste controle',
+    geminiStatusLabel: 'Gemini status',
+    rawStatusButton: 'Ruwe Status',
   },
   postGenerator: {
     title: 'Berichtgenerator',

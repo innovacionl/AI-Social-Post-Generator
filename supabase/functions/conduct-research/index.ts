@@ -22,6 +22,14 @@ function respond(body: unknown, status = 200) {
   });
 }
 
+// Normalize various Gemini status strings to lowercase canonical values
+function normalizeStatus(raw: unknown): string {
+  const s = (String(raw || "")).toLowerCase().trim();
+  if (s === "succeeded" || s === "completed" || s === "complete") return "completed";
+  if (s === "failed" || s === "error" || s === "cancelled" || s === "canceled") return "failed";
+  return s || "unknown";
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { status: 200, headers: corsHeaders });
@@ -43,6 +51,7 @@ Deno.serve(async (req: Request) => {
 
     if (action === "start") return await doStart(supabase, topic, geminiKey, language);
     if (action === "poll") return await doPoll(supabase, topic, geminiKey);
+    if (action === "status") return await doRawStatus(topic, geminiKey);
     return respond({ error: "Invalid action" }, 400);
   } catch (e) {
     return respond({ error: "Internal server error", details: String(e) }, 500);
@@ -101,12 +110,15 @@ async function doPoll(sb: any, topic: any, key: string) {
   });
 
   if (!res.ok) {
-    return respond({ status: "polling", researchStatus: "in_progress" });
+    const errText = await res.text().catch(() => res.status.toString());
+    return respond({ status: "polling", researchStatus: "in_progress", geminiError: `${res.status}: ${errText}` });
   }
 
   const data = await res.json();
+  const rawStatus = data.status || data.state || "";
+  const normalized = normalizeStatus(rawStatus);
 
-  if (data.status === "completed") {
+  if (normalized === "completed") {
     const summary = getOutputText(data);
     const sources = getSources(data, summary);
 
@@ -122,13 +134,14 @@ async function doPoll(sb: any, topic: any, key: string) {
     return respond({ status: "completed", topic: updated });
   }
 
-  if (data.status === "failed") {
+  if (normalized === "failed") {
     await sb.from("research_topics").update({
       status: "Pending", gemini_interaction_id: null,
     }).eq("id", topic.id);
-    return respond({ status: "failed", error: data.error || "Research failed" });
+    return respond({ status: "failed", error: data.error?.message || data.error || "Research failed" });
   }
 
+  // Still running — extract latest thinking summary
   let thought: string | null = null;
   if (Array.isArray(data.steps)) {
     for (const s of data.steps) {
@@ -140,7 +153,32 @@ async function doPoll(sb: any, topic: any, key: string) {
     }
   }
 
-  return respond({ status: "polling", researchStatus: data.status || "in_progress", thinkingSummary: thought });
+  return respond({
+    status: "polling",
+    researchStatus: rawStatus || "in_progress",
+    normalizedStatus: normalized,
+    thinkingSummary: thought,
+  });
+}
+
+// Returns raw Gemini response for diagnostics — no DB writes
+async function doRawStatus(topic: any, key: string) {
+  const iid = topic.gemini_interaction_id;
+  if (!iid) return respond({ error: "No gemini_interaction_id stored for this topic" }, 400);
+
+  const res = await fetch(`${GEMINI_BASE}/${iid}?key=${key}`, {
+    headers: { "Api-Revision": "2026-05-20" },
+  });
+
+  const text = await res.text();
+  let parsed: unknown = null;
+  try { parsed = JSON.parse(text); } catch { /* leave as null */ }
+
+  return respond({
+    httpStatus: res.status,
+    interactionId: iid,
+    raw: parsed ?? text,
+  });
 }
 
 function getOutputText(data: any): string {

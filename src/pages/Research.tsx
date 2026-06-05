@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Trash2, FlaskConical, X, ExternalLink, PenTool, Loader2, Clock, Brain, ArrowRight } from 'lucide-react';
+import { Trash2, FlaskConical, X, ExternalLink, PenTool, Loader2, Clock, Brain, ArrowRight, RefreshCw, RotateCcw } from 'lucide-react';
 import { supabase, supabaseConfigured, supabaseUrl, supabaseAnonKey } from '../lib/supabase';
 import { useI18n } from '../lib/i18n';
 
@@ -33,8 +33,22 @@ export default function Research() {
   const [startingId, setStartingId] = useState<string | null>(null);
   const [pollingIds, setPollingIds] = useState<Set<string>>(new Set());
   const [thinkingSummaries, setThinkingSummaries] = useState<Record<string, string>>({});
+  const [lastPollTimes, setLastPollTimes] = useState<Record<string, number>>({});
+  const [lastGeminiStatuses, setLastGeminiStatuses] = useState<Record<string, string>>({});
+  const [checkingNowIds, setCheckingNowIds] = useState<Set<string>>(new Set());
+  const [resettingIds, setResettingIds] = useState<Set<string>>(new Set());
   const [error, setError] = useState('');
+  const [tick, setTick] = useState(0);
+
   const pollTimers = useRef<Record<string, ReturnType<typeof setInterval>>>({});
+  const pollStartTimes = useRef<Record<string, number>>({});
+
+  // 1-second ticker to keep elapsed / last-checked displays live
+  useEffect(() => {
+    if (pollingIds.size === 0) return;
+    const timer = setInterval(() => setTick((n) => n + 1), 1000);
+    return () => clearInterval(timer);
+  }, [pollingIds.size]);
 
   useEffect(() => {
     fetchTopics();
@@ -52,6 +66,9 @@ export default function Research() {
       });
     }
   }, [topics]);
+
+  // suppress unused-var warning for tick; it drives re-renders so elapsed/ago helpers are current
+  void tick;
 
   async function fetchTopics() {
     if (!supabaseConfigured) {
@@ -85,6 +102,7 @@ export default function Research() {
       clearInterval(pollTimers.current[id]);
       delete pollTimers.current[id];
     }
+    delete pollStartTimes.current[id];
     setPollingIds((prev) => {
       const next = new Set(prev);
       next.delete(id);
@@ -108,6 +126,15 @@ export default function Research() {
 
       const data = await response.json();
 
+      setLastPollTimes((prev) => ({ ...prev, [id]: Date.now() }));
+
+      if (data.researchStatus || data.normalizedStatus) {
+        setLastGeminiStatuses((prev) => ({
+          ...prev,
+          [id]: data.researchStatus || data.normalizedStatus,
+        }));
+      }
+
       if (data.thinkingSummary) {
         setThinkingSummaries((prev) => ({ ...prev, [id]: data.thinkingSummary }));
       }
@@ -116,11 +143,9 @@ export default function Research() {
         stopPolling(id);
         setTopics((prev) => prev.map((tp) => (tp.id === id ? data.topic : tp)));
         setSelectedTopic((prev) => (prev?.id === id ? data.topic : prev));
-        setThinkingSummaries((prev) => {
-          const next = { ...prev };
-          delete next[id];
-          return next;
-        });
+        setThinkingSummaries((prev) => { const next = { ...prev }; delete next[id]; return next; });
+        setLastPollTimes((prev) => { const next = { ...prev }; delete next[id]; return next; });
+        setLastGeminiStatuses((prev) => { const next = { ...prev }; delete next[id]; return next; });
       } else if (data.status === 'failed') {
         stopPolling(id);
         setError(data.error || 'Research failed');
@@ -134,12 +159,13 @@ export default function Research() {
         );
       }
     } catch {
-      // Network error during poll -- will retry on next interval
+      // network error — will retry on next interval
     }
   }, []);
 
   function startPolling(id: string) {
     if (pollTimers.current[id]) return;
+    if (!pollStartTimes.current[id]) pollStartTimes.current[id] = Date.now();
     setPollingIds((prev) => new Set(prev).add(id));
     pollTimers.current[id] = setInterval(() => pollForResults(id), POLL_INTERVAL);
     pollForResults(id);
@@ -197,6 +223,37 @@ export default function Research() {
     }
   }
 
+  async function handleCheckNow(id: string) {
+    setCheckingNowIds((prev) => new Set(prev).add(id));
+    await pollForResults(id);
+    setCheckingNowIds((prev) => { const next = new Set(prev); next.delete(id); return next; });
+  }
+
+  async function handleReset(id: string) {
+    if (!supabaseConfigured) return;
+    setResettingIds((prev) => new Set(prev).add(id));
+    stopPolling(id);
+
+    await supabase
+      .from('research_topics')
+      .update({ status: 'Pending', gemini_interaction_id: null })
+      .eq('id', id);
+
+    setTopics((prev) =>
+      prev.map((tp) =>
+        tp.id === id ? { ...tp, status: 'Pending', gemini_interaction_id: null } : tp
+      )
+    );
+    setSelectedTopic((prev) =>
+      prev?.id === id ? { ...prev, status: 'Pending', gemini_interaction_id: null } : prev
+    );
+    setThinkingSummaries((prev) => { const next = { ...prev }; delete next[id]; return next; });
+    setLastPollTimes((prev) => { const next = { ...prev }; delete next[id]; return next; });
+    setLastGeminiStatuses((prev) => { const next = { ...prev }; delete next[id]; return next; });
+
+    setResettingIds((prev) => { const next = new Set(prev); next.delete(id); return next; });
+  }
+
   function handleDraftPost(topic: ResearchTopic) {
     navigate('/posts', { state: { researchTopic: topic } });
   }
@@ -210,6 +267,22 @@ export default function Research() {
     if (status === 'In Progress') return t.research.statusInProgress;
     if (status === 'Complete') return t.research.statusComplete;
     return status;
+  }
+
+  function formatElapsed(id: string): string {
+    const start = pollStartTimes.current[id];
+    if (!start) return '';
+    const secs = Math.floor((Date.now() - start) / 1000);
+    const m = Math.floor(secs / 60);
+    const s = secs % 60;
+    return m > 0 ? `${m}m ${s}s` : `${s}s`;
+  }
+
+  function formatAgo(id: string): string {
+    const last = lastPollTimes[id];
+    if (!last) return '';
+    const secs = Math.floor((Date.now() - last) / 1000);
+    return language === 'nl' ? `${secs}s geleden` : `${secs}s ago`;
   }
 
   if (loading) {
@@ -255,14 +328,16 @@ export default function Research() {
           {topics.map((topic) => {
             const researching = isResearching(topic.id);
             const isComplete = topic.status === 'Complete';
+            const isInProgress = topic.status === 'In Progress';
             const thinking = thinkingSummaries[topic.id];
+            const elapsed = formatElapsed(topic.id);
             return (
               <div
                 key={topic.id}
                 onClick={() => setSelectedTopic(topic)}
                 className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm hover:shadow-md hover:border-slate-300 transition-all cursor-pointer group"
               >
-                <div className="flex items-start justify-between gap-3 mb-3">
+                <div className="flex items-start justify-between gap-3 mb-1">
                   <span
                     className={`inline-block text-xs font-medium px-2 py-0.5 rounded-full border ${
                       statusColorMap[topic.status] || statusColorMap.Pending
@@ -286,7 +361,15 @@ export default function Research() {
                     )}
                   </button>
                 </div>
-                <p className="text-sm text-slate-800 leading-relaxed line-clamp-3">
+
+                {researching && elapsed && (
+                  <p className="text-xs text-blue-500 mb-2 flex items-center gap-1">
+                    <Clock size={10} />
+                    {t.research.runningFor} {elapsed}
+                  </p>
+                )}
+
+                <p className="text-sm text-slate-800 leading-relaxed line-clamp-3 mt-2">
                   {topic.question}
                 </p>
 
@@ -297,7 +380,7 @@ export default function Research() {
                   </div>
                 )}
 
-                <div className="mt-4 flex items-center gap-2">
+                <div className="mt-4 flex items-center gap-2 flex-wrap">
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
@@ -313,22 +396,31 @@ export default function Research() {
                     }`}
                   >
                     {isComplete ? (
-                      <>
-                        <FlaskConical size={12} />
-                        {t.research.researchComplete}
-                      </>
+                      <><FlaskConical size={12} />{t.research.researchComplete}</>
                     ) : researching ? (
-                      <>
-                        <Loader2 size={12} className="animate-spin" />
-                        {t.research.researching}
-                      </>
+                      <><Loader2 size={12} className="animate-spin" />{t.research.researching}</>
                     ) : (
-                      <>
-                        <FlaskConical size={12} />
-                        {t.research.conductResearch}
-                      </>
+                      <><FlaskConical size={12} />{t.research.conductResearch}</>
                     )}
                   </button>
+
+                  {isInProgress && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleReset(topic.id);
+                      }}
+                      disabled={resettingIds.has(topic.id)}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md border border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100 transition-colors"
+                    >
+                      {resettingIds.has(topic.id) ? (
+                        <><Loader2 size={12} className="animate-spin" />{t.research.resetting}</>
+                      ) : (
+                        <><RotateCcw size={12} />{t.research.resetResearch}</>
+                      )}
+                    </button>
+                  )}
+
                   {isComplete && (
                     <button
                       onClick={(e) => {
@@ -353,9 +445,16 @@ export default function Research() {
         <DetailModal
           topic={selectedTopic}
           isResearching={isResearching(selectedTopic.id)}
+          isCheckingNow={checkingNowIds.has(selectedTopic.id)}
+          isResetting={resettingIds.has(selectedTopic.id)}
           thinkingSummary={thinkingSummaries[selectedTopic.id] || null}
+          elapsed={formatElapsed(selectedTopic.id)}
+          lastCheckedAgo={formatAgo(selectedTopic.id)}
+          geminiStatus={lastGeminiStatuses[selectedTopic.id] || null}
           onClose={() => setSelectedTopic(null)}
           onConductResearch={() => handleConductResearch(selectedTopic.id)}
+          onCheckNow={() => handleCheckNow(selectedTopic.id)}
+          onReset={() => handleReset(selectedTopic.id)}
           onDraftPost={() => handleDraftPost(selectedTopic)}
           statusLabel={statusLabel}
         />
@@ -367,17 +466,31 @@ export default function Research() {
 function DetailModal({
   topic,
   isResearching,
+  isCheckingNow,
+  isResetting,
   thinkingSummary,
+  elapsed,
+  lastCheckedAgo,
+  geminiStatus,
   onClose,
   onConductResearch,
+  onCheckNow,
+  onReset,
   onDraftPost,
   statusLabel,
 }: {
   topic: ResearchTopic;
   isResearching: boolean;
+  isCheckingNow: boolean;
+  isResetting: boolean;
   thinkingSummary: string | null;
+  elapsed: string;
+  lastCheckedAgo: string;
+  geminiStatus: string | null;
   onClose: () => void;
   onConductResearch: () => void;
+  onCheckNow: () => void;
+  onReset: () => void;
   onDraftPost: () => void;
   statusLabel: (s: string) => string;
 }) {
@@ -429,10 +542,37 @@ function DetailModal({
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2 text-xs text-blue-500 justify-center">
-                  <Clock size={11} />
-                  <span>{t.research.detailResearchingTime}</span>
+                {/* Elapsed + last-checked row */}
+                <div className="flex items-center justify-center gap-4 text-xs text-blue-500 flex-wrap">
+                  {elapsed && (
+                    <span className="flex items-center gap-1">
+                      <Clock size={11} />
+                      {t.research.runningFor} <strong className="text-blue-700">{elapsed}</strong>
+                    </span>
+                  )}
+                  {lastCheckedAgo && (
+                    <span className="flex items-center gap-1">
+                      <RefreshCw size={11} />
+                      {t.research.lastChecked}: <strong className="text-blue-700">{lastCheckedAgo}</strong>
+                    </span>
+                  )}
+                  {!elapsed && (
+                    <span className="flex items-center gap-1">
+                      <Clock size={11} />
+                      {t.research.detailResearchingTime}
+                    </span>
+                  )}
                 </div>
+
+                {/* Gemini raw status badge */}
+                {geminiStatus && (
+                  <div className="flex justify-center">
+                    <span className="inline-flex items-center gap-1 text-xs bg-white/80 border border-blue-200 rounded-full px-3 py-1 text-blue-600">
+                      <span className="font-medium">{t.research.geminiStatusLabel}:</span>
+                      <code className="font-mono">{geminiStatus}</code>
+                    </span>
+                  </div>
+                )}
 
                 {thinkingSummary && (
                   <div className="bg-white/70 rounded-lg px-4 py-3 border border-blue-100">
@@ -497,7 +637,33 @@ function DetailModal({
             </div>
           )}
 
-          <div className="border-t border-slate-100 pt-5 flex gap-3">
+          <div className="border-t border-slate-100 pt-5 flex gap-3 flex-wrap">
+            {topic.status === 'In Progress' && isResearching && (
+              <>
+                <button
+                  onClick={onCheckNow}
+                  disabled={isCheckingNow}
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-60 transition-colors shadow-sm"
+                >
+                  {isCheckingNow ? (
+                    <><Loader2 size={14} className="animate-spin" />{t.research.checking}</>
+                  ) : (
+                    <><RefreshCw size={14} />{t.research.checkNow}</>
+                  )}
+                </button>
+                <button
+                  onClick={onReset}
+                  disabled={isResetting}
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-amber-50 text-amber-700 border border-amber-200 text-sm font-medium rounded-lg hover:bg-amber-100 disabled:opacity-60 transition-colors"
+                >
+                  {isResetting ? (
+                    <><Loader2 size={14} className="animate-spin" />{t.research.resetting}</>
+                  ) : (
+                    <><RotateCcw size={14} />{t.research.resetResearch}</>
+                  )}
+                </button>
+              </>
+            )}
             {topic.status !== 'Complete' && !isResearching && (
               <button
                 onClick={onConductResearch}
