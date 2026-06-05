@@ -175,13 +175,8 @@ export default function Research() {
     if (!supabaseConfigured) return;
     setStartingId(id);
     setError('');
-
-    setTopics((prev) =>
-      prev.map((tp) => (tp.id === id ? { ...tp, status: 'In Progress' } : tp))
-    );
-    if (selectedTopic?.id === id) {
-      setSelectedTopic((prev) => (prev ? { ...prev, status: 'In Progress' } : prev));
-    }
+    // No optimistic status update here — it would trigger the polling useEffect before
+    // the edge function has written "In Progress" to the DB, causing an immediate false failure.
 
     try {
       const apiUrl = `${supabaseUrl}/functions/v1/conduct-research`;
@@ -215,12 +210,8 @@ export default function Research() {
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Research failed to start');
-      setTopics((prev) =>
-        prev.map((tp) => (tp.id === id ? { ...tp, status: 'Pending' } : tp))
-      );
-      if (selectedTopic?.id === id) {
-        setSelectedTopic((prev) => (prev ? { ...prev, status: 'Pending' } : prev));
-      }
+      // Re-fetch the real status from DB so the UI is in sync
+      fetchTopics();
     } finally {
       setStartingId(null);
     }
