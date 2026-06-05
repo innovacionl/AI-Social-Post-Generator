@@ -11,7 +11,7 @@ interface ResearchTopic {
   industry: string;
   status: string;
   findings: { summary?: string; sources?: { title: string; url: string }[] } | null;
-  gemini_interaction_id: string | null;
+
   created_at: string;
 }
 
@@ -151,11 +151,11 @@ export default function Research() {
         setError(data.error || 'Research failed');
         setTopics((prev) =>
           prev.map((tp) =>
-            tp.id === id ? { ...tp, status: 'Pending', gemini_interaction_id: null } : tp
+            tp.id === id ? { ...tp, status: 'Pending' } : tp
           )
         );
         setSelectedTopic((prev) =>
-          prev?.id === id ? { ...prev, status: 'Pending', gemini_interaction_id: null } : prev
+          prev?.id === id ? { ...prev, status: 'Pending' } : prev
         );
       }
     } catch {
@@ -230,16 +230,16 @@ export default function Research() {
 
     await supabase
       .from('research_topics')
-      .update({ status: 'Pending', gemini_interaction_id: null })
+      .update({ status: 'Pending' })
       .eq('id', id);
 
     setTopics((prev) =>
       prev.map((tp) =>
-        tp.id === id ? { ...tp, status: 'Pending', gemini_interaction_id: null } : tp
+        tp.id === id ? { ...tp, status: 'Pending' } : tp
       )
     );
     setSelectedTopic((prev) =>
-      prev?.id === id ? { ...prev, status: 'Pending', gemini_interaction_id: null } : prev
+      prev?.id === id ? { ...prev, status: 'Pending' } : prev
     );
     setThinkingSummaries((prev) => { const next = { ...prev }; delete next[id]; return next; });
     setLastPollTimes((prev) => { const next = { ...prev }; delete next[id]; return next; });

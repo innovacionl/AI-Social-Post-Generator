@@ -42,7 +42,7 @@ Deno.serve(async (req: Request) => {
     if (action === "start") {
       // Mark in-progress so the UI reflects it immediately
       await supabase.from("research_topics")
-        .update({ status: "In Progress", gemini_interaction_id: null })
+        .update({ status: "In Progress" })
         .eq("id", topicId);
 
       // Call OpenRouter synchronously — waitUntil is unreliable in Supabase edge runtime
@@ -50,7 +50,7 @@ Deno.serve(async (req: Request) => {
 
       if (researchError || !summary) {
         await supabase.from("research_topics")
-          .update({ status: "Pending", gemini_interaction_id: null })
+          .update({ status: "Pending" })
           .eq("id", topicId);
         return respond({ status: "failed", error: researchError || "Empty response from model" });
       }
@@ -58,7 +58,6 @@ Deno.serve(async (req: Request) => {
       await supabase.from("research_topics").update({
         status: "Complete",
         findings: { summary, sources: [] },
-        gemini_interaction_id: null,
       }).eq("id", topicId);
 
       const { data: updated } = await supabase
