@@ -19,6 +19,7 @@ import {
   History,
 } from 'lucide-react';
 import { supabase, supabaseConfigured, supabaseUrl, supabaseAnonKey } from '../lib/supabase';
+import { useI18n } from '../lib/i18n';
 
 interface ResearchTopic {
   id: string;
@@ -36,22 +37,6 @@ interface GeneratedVariation {
   content: string;
   research_topic_id: string;
 }
-
-const toneOptions = [
-  'Inspirational & Motivational',
-  'Educational & Informative',
-  'Conversational & Casual',
-  'Professional & Authoritative',
-  'Storytelling & Narrative',
-];
-
-const variationLabels = [
-  'Hook / Attention-Grabber',
-  'Data-Led / Statistics',
-  'Storytelling / Narrative',
-  'Contrarian / Challenging',
-  'Call-to-Action / Engagement',
-];
 
 const STORAGE_KEY_RESEARCH = 'postgen_research_item';
 const STORAGE_KEY_VARIATIONS = 'postgen_variations';
@@ -71,6 +56,8 @@ function loadSession<T>(key: string, fallback: T): T {
 
 export default function PostGenerator() {
   const location = useLocation();
+  const { t } = useI18n();
+
   const [researchItem, setResearchItem] = useState<ResearchTopic | null>(() =>
     loadSession(STORAGE_KEY_RESEARCH, null)
   );
@@ -78,7 +65,7 @@ export default function PostGenerator() {
     loadSession(STORAGE_KEY_PLATFORM, 'linkedin')
   );
   const [selectedTone, setSelectedTone] = useState(() =>
-    loadSession(STORAGE_KEY_TONE, toneOptions[0])
+    loadSession(STORAGE_KEY_TONE, t.postGenerator.toneOptions[0])
   );
   const [customStyle, setCustomStyle] = useState(() =>
     loadSession(STORAGE_KEY_STYLE, '')
@@ -205,10 +192,8 @@ export default function PostGenerator() {
   return (
     <div className="p-8 max-w-3xl mx-auto">
       <div className="mb-8">
-        <h1 className="text-2xl font-bold text-slate-900">Post Generator</h1>
-        <p className="text-slate-500 mt-1">
-          Transform research into engaging social media posts.
-        </p>
+        <h1 className="text-2xl font-bold text-slate-900">{t.postGenerator.title}</h1>
+        <p className="text-slate-500 mt-1">{t.postGenerator.subtitle}</p>
       </div>
 
       <div className="space-y-6">
@@ -216,7 +201,7 @@ export default function PostGenerator() {
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
           <h2 className="text-sm font-semibold text-slate-700 mb-3 flex items-center gap-2">
             <FileText size={14} />
-            Research Source
+            {t.postGenerator.researchSourceTitle}
           </h2>
           {researchItem ? (
             <div className="bg-slate-50 border border-slate-200 rounded-lg p-4">
@@ -228,7 +213,7 @@ export default function PostGenerator() {
                 {sourceCount > 0 && (
                   <span className="inline-flex items-center gap-1 text-xs text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded">
                     <Link2 size={10} />
-                    {sourceCount} source{sourceCount !== 1 ? 's' : ''}
+                    {sourceCount} {sourceCount !== 1 ? t.postGenerator.sources : t.postGenerator.source}
                   </span>
                 )}
               </div>
@@ -248,11 +233,11 @@ export default function PostGenerator() {
                     >
                       {researchExpanded ? (
                         <>
-                          Show less <ChevronUp size={12} />
+                          {t.postGenerator.showLess} <ChevronUp size={12} />
                         </>
                       ) : (
                         <>
-                          Show full research <ChevronDown size={12} />
+                          {t.postGenerator.showFullResearch} <ChevronDown size={12} />
                         </>
                       )}
                     </button>
@@ -262,17 +247,14 @@ export default function PostGenerator() {
             </div>
           ) : (
             <div className="bg-slate-50 border border-dashed border-slate-300 rounded-lg p-6 text-center">
-              <p className="text-sm text-slate-400">
-                No research selected. Go to the Research page and click "Add to Post Generator" on a
-                completed topic.
-              </p>
+              <p className="text-sm text-slate-400">{t.postGenerator.noResearchSelected}</p>
             </div>
           )}
         </div>
 
         {/* Target Platform */}
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
-          <h2 className="text-sm font-semibold text-slate-700 mb-3">Target Platform</h2>
+          <h2 className="text-sm font-semibold text-slate-700 mb-3">{t.postGenerator.targetPlatformTitle}</h2>
           <div className="grid grid-cols-2 gap-3">
             <button
               onClick={() => setSelectedPlatform('twitter')}
@@ -283,7 +265,7 @@ export default function PostGenerator() {
               }`}
             >
               <Twitter size={16} />
-              X (Twitter)
+              {t.common.xTwitter}
             </button>
             <button
               onClick={() => setSelectedPlatform('linkedin')}
@@ -294,7 +276,7 @@ export default function PostGenerator() {
               }`}
             >
               <Linkedin size={16} />
-              LinkedIn
+              {t.common.linkedin}
             </button>
           </div>
         </div>
@@ -302,9 +284,9 @@ export default function PostGenerator() {
         {/* Tone & Style */}
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6 space-y-5">
           <div>
-            <h2 className="text-sm font-semibold text-slate-700 mb-3">Preset Tone</h2>
+            <h2 className="text-sm font-semibold text-slate-700 mb-3">{t.postGenerator.presetToneTitle}</h2>
             <div className="flex flex-wrap gap-2">
-              {toneOptions.map((tone) => (
+              {t.postGenerator.toneOptions.map((tone) => (
                 <button
                   key={tone}
                   onClick={() => setSelectedTone(tone)}
@@ -323,15 +305,13 @@ export default function PostGenerator() {
           <div className="border-t border-slate-100 pt-5">
             <h2 className="text-sm font-semibold text-slate-700 mb-1.5 flex items-center gap-2">
               <MessageSquare size={14} />
-              Custom Style Notes
+              {t.postGenerator.customStyleTitle}
             </h2>
-            <p className="text-xs text-slate-400 mb-3">
-              Optional. Add specific instructions about voice, format, or angle.
-            </p>
+            <p className="text-xs text-slate-400 mb-3">{t.postGenerator.customStyleSubtitle}</p>
             <textarea
               value={customStyle}
               onChange={(e) => setCustomStyle(e.target.value)}
-              placeholder="e.g. Write like a startup founder sharing lessons learned. Use short punchy sentences. Include a personal anecdote angle..."
+              placeholder={t.postGenerator.customStylePlaceholder}
               rows={3}
               className="w-full px-3 py-2.5 text-sm text-slate-700 bg-slate-50 border border-slate-200 rounded-lg placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-400 transition-all resize-none"
             />
@@ -359,12 +339,12 @@ export default function PostGenerator() {
             {generating ? (
               <>
                 <Loader2 size={16} className="animate-spin" />
-                Generating 5 Post Variations...
+                {t.postGenerator.generatingButton}
               </>
             ) : (
               <>
                 <Sparkles size={16} />
-                Generate 5 Posts
+                {t.postGenerator.generateButton}
               </>
             )}
           </button>
@@ -377,7 +357,7 @@ export default function PostGenerator() {
               className="inline-flex items-center gap-2 px-4 py-3 text-sm font-medium text-slate-700 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 hover:border-slate-300 transition-all shadow-sm"
             >
               <History size={16} />
-              Open Last Generations
+              {t.postGenerator.openLastGenerations}
             </button>
           )}
         </div>
@@ -401,7 +381,7 @@ export default function PostGenerator() {
                     <Linkedin size={14} className="text-blue-600" />
                   )}
                   <span className="text-sm font-medium text-slate-600">
-                    {activeVariation.platform === 'twitter' ? 'X (Twitter)' : 'LinkedIn'}
+                    {activeVariation.platform === 'twitter' ? t.common.xTwitter : t.common.linkedin}
                   </span>
                 </div>
                 <span className="text-xs text-slate-400">{activeVariation.tone}</span>
@@ -421,10 +401,10 @@ export default function PostGenerator() {
                   {activeIndex + 1}
                 </span>
                 <span className="text-sm font-semibold text-slate-800">
-                  {variationLabels[activeIndex] || `Variation ${activeIndex + 1}`}
+                  {t.postGenerator.variationLabels[activeIndex] || `Variatie ${activeIndex + 1}`}
                 </span>
                 <span className="text-xs text-slate-400 ml-auto">
-                  {activeIndex + 1} of {variations.length}
+                  {activeIndex + 1} {t.postGenerator.ofLabel} {variations.length}
                 </span>
               </div>
 
@@ -464,7 +444,7 @@ export default function PostGenerator() {
                 }`}
               >
                 <ChevronLeft size={16} />
-                Previous
+                {t.postGenerator.previous}
               </button>
 
               <div className="flex items-center gap-2">
@@ -475,12 +455,12 @@ export default function PostGenerator() {
                   {copiedIndex === activeIndex ? (
                     <>
                       <Check size={14} className="text-teal-600" />
-                      <span className="text-teal-600">Copied</span>
+                      <span className="text-teal-600">{t.postGenerator.copied}</span>
                     </>
                   ) : (
                     <>
                       <Copy size={14} />
-                      Copy
+                      {t.postGenerator.copy}
                     </>
                   )}
                 </button>
@@ -499,17 +479,17 @@ export default function PostGenerator() {
                   {savedIndexes.has(activeIndex) ? (
                     <>
                       <Check size={14} />
-                      Saved to Drafts
+                      {t.postGenerator.savedToDrafts}
                     </>
                   ) : savingIndex === activeIndex ? (
                     <>
                       <Loader2 size={14} className="animate-spin" />
-                      Saving...
+                      {t.postGenerator.saving}
                     </>
                   ) : (
                     <>
                       <Save size={14} />
-                      Save to Drafts
+                      {t.postGenerator.saveToDrafts}
                     </>
                   )}
                 </button>
@@ -526,7 +506,7 @@ export default function PostGenerator() {
                     : 'text-slate-600 hover:bg-slate-100'
                 }`}
               >
-                Next
+                {t.postGenerator.next}
                 <ChevronRight size={16} />
               </button>
             </div>

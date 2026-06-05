@@ -10,6 +10,7 @@ import {
   Calendar,
   Search,
 } from 'lucide-react';
+import { useI18n } from '../lib/i18n';
 
 interface PastPost {
   id: string;
@@ -25,6 +26,7 @@ const VISIBLE_LINES = 6;
 const CLAMP_HEIGHT = `${LINE_HEIGHT_REM * VISIBLE_LINES}rem`;
 
 export default function PastPosts() {
+  const { t } = useI18n();
   const [posts, setPosts] = useState<PastPost[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
@@ -76,9 +78,9 @@ export default function PastPosts() {
   return (
     <div className="max-w-4xl mx-auto px-6 py-10">
       <div className="mb-8">
-        <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Past Posts</h1>
+        <h1 className="text-2xl font-bold text-slate-900 tracking-tight">{t.pastPosts.title}</h1>
         <p className="text-sm text-slate-500 mt-1">
-          Posts you've already published. {posts.length} total.
+          {t.pastPosts.subtitleCount} {posts.length} totaal.
         </p>
       </div>
 
@@ -87,7 +89,7 @@ export default function PastPosts() {
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
             type="text"
-            placeholder="Search past posts..."
+            placeholder={t.pastPosts.searchPlaceholder}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full pl-9 pr-4 py-2.5 text-sm border border-slate-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-teal-500/30 focus:border-teal-400 transition-all"
@@ -99,12 +101,10 @@ export default function PastPosts() {
         <div className="text-center py-20">
           <Archive size={40} className="mx-auto text-slate-300 mb-4" />
           <h3 className="text-lg font-semibold text-slate-700">
-            {posts.length === 0 ? 'No past posts yet' : 'No matching posts'}
+            {posts.length === 0 ? t.pastPosts.emptyNoPostsTitle : t.pastPosts.emptyNoMatchTitle}
           </h3>
           <p className="text-sm text-slate-500 mt-1">
-            {posts.length === 0
-              ? 'When you mark drafts as posted, they\'ll appear here.'
-              : 'Try adjusting your search terms.'}
+            {posts.length === 0 ? t.pastPosts.emptyNoPostsSub : t.pastPosts.emptyNoMatchSub}
           </p>
         </div>
       ) : (
@@ -123,12 +123,12 @@ export default function PastPosts() {
                     ) : (
                       <Linkedin size={12} />
                     )}
-                    {post.platform === 'twitter' ? 'X / Twitter' : 'LinkedIn'}
+                    {post.platform === 'twitter' ? t.common.xTwitter : t.common.linkedin}
                   </span>
                   <span className="text-xs text-slate-400 capitalize">{post.tone}</span>
                   <div className="ml-auto flex items-center gap-1.5 text-xs text-slate-400">
                     <Calendar size={12} />
-                    Posted {formatDate(post.posted_at)}
+                    {t.pastPosts.postedOn} {formatDate(post.posted_at)}
                   </div>
                 </div>
 
@@ -151,12 +151,12 @@ export default function PastPosts() {
                   {isExpanded ? (
                     <>
                       <ChevronUp size={14} />
-                      Show less
+                      {t.pastPosts.showLess}
                     </>
                   ) : (
                     <>
                       <ChevronDown size={14} />
-                      Show more
+                      {t.pastPosts.showMore}
                     </>
                   )}
                 </button>
@@ -171,7 +171,7 @@ export default function PastPosts() {
 
 function formatDate(iso: string): string {
   const d = new Date(iso);
-  return d.toLocaleDateString('en-US', {
+  return d.toLocaleDateString('nl-NL', {
     month: 'short',
     day: 'numeric',
     year: 'numeric',

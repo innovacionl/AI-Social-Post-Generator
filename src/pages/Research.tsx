@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Trash2, FlaskConical, X, ExternalLink, PenTool, Loader2, Clock, Brain, ArrowRight } from 'lucide-react';
 import { supabase, supabaseConfigured, supabaseUrl, supabaseAnonKey } from '../lib/supabase';
+import { useI18n } from '../lib/i18n';
 
 interface ResearchTopic {
   id: string;
@@ -14,7 +15,7 @@ interface ResearchTopic {
   created_at: string;
 }
 
-const statusColors: Record<string, string> = {
+const statusColorMap: Record<string, string> = {
   Pending: 'bg-amber-50 text-amber-700 border-amber-200',
   'In Progress': 'bg-blue-50 text-blue-700 border-blue-200',
   Complete: 'bg-green-50 text-green-700 border-green-200',
@@ -24,6 +25,7 @@ const POLL_INTERVAL = 12000;
 
 export default function Research() {
   const navigate = useNavigate();
+  const { t } = useI18n();
   const [topics, setTopics] = useState<ResearchTopic[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedTopic, setSelectedTopic] = useState<ResearchTopic | null>(null);
@@ -43,9 +45,9 @@ export default function Research() {
 
   useEffect(() => {
     if (topics.length > 0) {
-      topics.forEach((t) => {
-        if (t.status === 'In Progress' && t.gemini_interaction_id && !pollTimers.current[t.id]) {
-          startPolling(t.id);
+      topics.forEach((tp) => {
+        if (tp.status === 'In Progress' && tp.gemini_interaction_id && !pollTimers.current[tp.id]) {
+          startPolling(tp.id);
         }
       });
     }
@@ -72,7 +74,7 @@ export default function Research() {
     stopPolling(id);
     const { error: delErr } = await supabase.from('research_topics').delete().eq('id', id);
     if (!delErr) {
-      setTopics((prev) => prev.filter((t) => t.id !== id));
+      setTopics((prev) => prev.filter((tp) => tp.id !== id));
       if (selectedTopic?.id === id) setSelectedTopic(null);
     }
     setDeletingId(null);
@@ -112,7 +114,7 @@ export default function Research() {
 
       if (data.status === 'completed' && data.topic) {
         stopPolling(id);
-        setTopics((prev) => prev.map((t) => (t.id === id ? data.topic : t)));
+        setTopics((prev) => prev.map((tp) => (tp.id === id ? data.topic : tp)));
         setSelectedTopic((prev) => (prev?.id === id ? data.topic : prev));
         setThinkingSummaries((prev) => {
           const next = { ...prev };
@@ -123,8 +125,8 @@ export default function Research() {
         stopPolling(id);
         setError(data.error || 'Research failed');
         setTopics((prev) =>
-          prev.map((t) =>
-            t.id === id ? { ...t, status: 'Pending', gemini_interaction_id: null } : t
+          prev.map((tp) =>
+            tp.id === id ? { ...tp, status: 'Pending', gemini_interaction_id: null } : tp
           )
         );
         setSelectedTopic((prev) =>
@@ -149,7 +151,7 @@ export default function Research() {
     setError('');
 
     setTopics((prev) =>
-      prev.map((t) => (t.id === id ? { ...t, status: 'In Progress' } : t))
+      prev.map((tp) => (tp.id === id ? { ...tp, status: 'In Progress' } : tp))
     );
     if (selectedTopic?.id === id) {
       setSelectedTopic((prev) => (prev ? { ...prev, status: 'In Progress' } : prev));
@@ -174,10 +176,10 @@ export default function Research() {
       const data = await response.json();
       if (data.status === 'started') {
         setTopics((prev) =>
-          prev.map((t) =>
-            t.id === id
-              ? { ...t, status: 'In Progress', gemini_interaction_id: data.interactionId }
-              : t
+          prev.map((tp) =>
+            tp.id === id
+              ? { ...tp, status: 'In Progress', gemini_interaction_id: data.interactionId }
+              : tp
           )
         );
         startPolling(id);
@@ -185,7 +187,7 @@ export default function Research() {
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Research failed to start');
       setTopics((prev) =>
-        prev.map((t) => (t.id === id ? { ...t, status: 'Pending' } : t))
+        prev.map((tp) => (tp.id === id ? { ...tp, status: 'Pending' } : tp))
       );
       if (selectedTopic?.id === id) {
         setSelectedTopic((prev) => (prev ? { ...prev, status: 'Pending' } : prev));
@@ -203,6 +205,13 @@ export default function Research() {
     return startingId === id || pollingIds.has(id);
   }
 
+  function statusLabel(status: string) {
+    if (status === 'Pending') return t.research.statusPending;
+    if (status === 'In Progress') return t.research.statusInProgress;
+    if (status === 'Complete') return t.research.statusComplete;
+    return status;
+  }
+
   if (loading) {
     return (
       <div className="p-8 flex items-center justify-center min-h-[50vh]">
@@ -214,10 +223,8 @@ export default function Research() {
   return (
     <div className="p-8 max-w-5xl mx-auto">
       <div className="mb-8">
-        <h1 className="text-2xl font-bold text-slate-900">Research</h1>
-        <p className="text-slate-500 mt-1">
-          Manage your research topics. Click a card to view details.
-        </p>
+        <h1 className="text-2xl font-bold text-slate-900">{t.research.title}</h1>
+        <p className="text-slate-500 mt-1">{t.research.subtitle}</p>
       </div>
 
       {error && (
@@ -233,14 +240,14 @@ export default function Research() {
         <div className="bg-white rounded-xl border border-slate-200 p-12 text-center">
           <FlaskConical size={40} className="mx-auto text-slate-300 mb-3" />
           <p className="text-slate-500 text-sm">
-            No research topics yet. Head to{' '}
+            {t.research.emptyTitle}
             <button
               onClick={() => navigate('/topics')}
               className="text-teal-600 hover:underline font-medium"
             >
-              Topic Choice
-            </button>{' '}
-            to generate questions.
+              {t.research.emptyLinkLabel}
+            </button>
+            {t.research.emptyAfterLink}
           </p>
         </div>
       ) : (
@@ -258,10 +265,10 @@ export default function Research() {
                 <div className="flex items-start justify-between gap-3 mb-3">
                   <span
                     className={`inline-block text-xs font-medium px-2 py-0.5 rounded-full border ${
-                      statusColors[topic.status] || statusColors.Pending
+                      statusColorMap[topic.status] || statusColorMap.Pending
                     }`}
                   >
-                    {topic.status}
+                    {statusLabel(topic.status)}
                   </span>
                   <button
                     onClick={(e) => {
@@ -270,7 +277,7 @@ export default function Research() {
                     }}
                     disabled={deletingId === topic.id}
                     className="text-slate-400 hover:text-red-500 transition-colors p-1 rounded"
-                    title="Delete topic"
+                    title={t.research.deleteTitle}
                   >
                     {deletingId === topic.id ? (
                       <Loader2 size={14} className="animate-spin" />
@@ -308,17 +315,17 @@ export default function Research() {
                     {isComplete ? (
                       <>
                         <FlaskConical size={12} />
-                        Research Complete
+                        {t.research.researchComplete}
                       </>
                     ) : researching ? (
                       <>
                         <Loader2 size={12} className="animate-spin" />
-                        Researching...
+                        {t.research.researching}
                       </>
                     ) : (
                       <>
                         <FlaskConical size={12} />
-                        Conduct Research
+                        {t.research.conductResearch}
                       </>
                     )}
                   </button>
@@ -331,7 +338,7 @@ export default function Research() {
                       className="ml-auto inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md border border-teal-200 bg-teal-50 text-teal-700 hover:bg-teal-100 hover:border-teal-300 transition-colors"
                     >
                       <PenTool size={12} />
-                      Add to Post Generator
+                      {t.research.addToPostGenerator}
                       <ArrowRight size={12} />
                     </button>
                   )}
@@ -350,6 +357,7 @@ export default function Research() {
           onClose={() => setSelectedTopic(null)}
           onConductResearch={() => handleConductResearch(selectedTopic.id)}
           onDraftPost={() => handleDraftPost(selectedTopic)}
+          statusLabel={statusLabel}
         />
       )}
     </div>
@@ -363,6 +371,7 @@ function DetailModal({
   onClose,
   onConductResearch,
   onDraftPost,
+  statusLabel,
 }: {
   topic: ResearchTopic;
   isResearching: boolean;
@@ -370,17 +379,20 @@ function DetailModal({
   onClose: () => void;
   onConductResearch: () => void;
   onDraftPost: () => void;
+  statusLabel: (s: string) => string;
 }) {
+  const { t } = useI18n();
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
       <div className="bg-white rounded-2xl shadow-xl max-w-2xl w-full max-h-[85vh] overflow-y-auto">
         <div className="sticky top-0 bg-white border-b border-slate-100 px-6 py-4 flex items-center justify-between rounded-t-2xl z-10">
           <span
             className={`text-xs font-medium px-2 py-0.5 rounded-full border ${
-              statusColors[topic.status] || statusColors.Pending
+              statusColorMap[topic.status] || statusColorMap.Pending
             }`}
           >
-            {topic.status}
+            {statusLabel(topic.status)}
           </span>
           <button
             onClick={onClose}
@@ -401,7 +413,7 @@ function DetailModal({
           </div>
 
           <div className="border-t border-slate-100 pt-5">
-            <h3 className="text-sm font-semibold text-slate-700 mb-3">Research Findings</h3>
+            <h3 className="text-sm font-semibold text-slate-700 mb-3">{t.research.detailFindingsTitle}</h3>
             {isResearching ? (
               <div className="bg-gradient-to-br from-blue-50 to-sky-50 border border-blue-200 rounded-xl p-6 space-y-4">
                 <div className="flex items-center justify-center gap-3">
@@ -412,23 +424,21 @@ function DetailModal({
                     </div>
                   </div>
                   <div>
-                    <p className="text-sm text-blue-800 font-semibold">Deep Research in Progress</p>
-                    <p className="text-xs text-blue-500 mt-0.5">
-                      Gemini is searching the web and analyzing sources
-                    </p>
+                    <p className="text-sm text-blue-800 font-semibold">{t.research.detailResearchingTitle}</p>
+                    <p className="text-xs text-blue-500 mt-0.5">{t.research.detailResearchingSubtitle}</p>
                   </div>
                 </div>
 
                 <div className="flex items-center gap-2 text-xs text-blue-500 justify-center">
                   <Clock size={11} />
-                  <span>This typically takes 2 -- 10 minutes</span>
+                  <span>{t.research.detailResearchingTime}</span>
                 </div>
 
                 {thinkingSummary && (
                   <div className="bg-white/70 rounded-lg px-4 py-3 border border-blue-100">
                     <div className="flex items-center gap-1.5 text-xs font-medium text-blue-700 mb-1.5">
                       <Brain size={11} />
-                      Latest Update
+                      {t.research.detailLatestUpdate}
                     </div>
                     <p className="text-xs text-blue-600 leading-relaxed">{thinkingSummary}</p>
                   </div>
@@ -450,9 +460,7 @@ function DetailModal({
               </div>
             ) : (
               <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 text-center">
-                <p className="text-sm text-slate-400">
-                  No research conducted yet. Click "Conduct Research" to begin.
-                </p>
+                <p className="text-sm text-slate-400">{t.research.detailNoFindings}</p>
               </div>
             )}
           </div>
@@ -460,7 +468,7 @@ function DetailModal({
           {!isResearching && topic.findings?.sources && topic.findings.sources.length > 0 && (
             <div>
               <h3 className="text-sm font-semibold text-slate-700 mb-3">
-                Sources & Citations ({topic.findings.sources.length})
+                {t.research.detailSourcesTitle} ({topic.findings.sources.length})
               </h3>
               <ul className="space-y-2 max-h-48 overflow-y-auto">
                 {topic.findings.sources.map((source, i) => (
@@ -482,9 +490,9 @@ function DetailModal({
 
           {!isResearching && !topic.findings?.sources?.length && topic.status !== 'In Progress' && (
             <div>
-              <h3 className="text-sm font-semibold text-slate-700 mb-3">Sources & Citations</h3>
+              <h3 className="text-sm font-semibold text-slate-700 mb-3">{t.research.detailSourcesTitle}</h3>
               <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 text-center">
-                <p className="text-sm text-slate-400">Sources will appear here after research.</p>
+                <p className="text-sm text-slate-400">{t.research.detailNoSources}</p>
               </div>
             </div>
           )}
@@ -496,7 +504,7 @@ function DetailModal({
                 className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
               >
                 <FlaskConical size={14} />
-                Conduct Research
+                {t.research.detailConductButton}
               </button>
             )}
             <button
@@ -504,13 +512,13 @@ function DetailModal({
               className="inline-flex items-center gap-2 px-4 py-2 bg-teal-600 text-white text-sm font-medium rounded-lg hover:bg-teal-700 transition-colors shadow-sm"
             >
               <PenTool size={14} />
-              Draft a Post
+              {t.research.detailDraftButton}
             </button>
             <button
               onClick={onClose}
               className="px-4 py-2 text-sm font-medium text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors"
             >
-              Close
+              {t.research.detailCloseButton}
             </button>
           </div>
         </div>

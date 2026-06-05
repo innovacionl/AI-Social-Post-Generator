@@ -16,6 +16,7 @@ import {
   CheckCircle2,
 } from 'lucide-react';
 import { supabase, supabaseConfigured } from '../lib/supabase';
+import { useI18n } from '../lib/i18n';
 
 interface PostDraft {
   id: string;
@@ -30,6 +31,7 @@ type SortField = 'created_at' | 'platform' | 'tone';
 type SortDirection = 'asc' | 'desc';
 
 export default function Drafts() {
+  const { t } = useI18n();
   const [drafts, setDrafts] = useState<PostDraft[]>([]);
   const [loading, setLoading] = useState(true);
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -146,7 +148,7 @@ export default function Drafts() {
     });
 
   function formatDate(dateStr: string) {
-    return new Date(dateStr).toLocaleDateString('en-US', {
+    return new Date(dateStr).toLocaleDateString('nl-NL', {
       month: 'short',
       day: 'numeric',
       year: 'numeric',
@@ -159,13 +161,11 @@ export default function Drafts() {
     <div className="p-8 max-w-5xl mx-auto">
       <div className="flex items-start justify-between mb-8">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Drafts</h1>
-          <p className="text-slate-500 mt-1">
-            Manage your saved post drafts. Edit, copy, or delete them.
-          </p>
+          <h1 className="text-2xl font-bold text-slate-900">{t.drafts.title}</h1>
+          <p className="text-slate-500 mt-1">{t.drafts.subtitle}</p>
         </div>
         <span className="text-sm text-slate-400 mt-1">
-          {filteredDrafts.length} draft{filteredDrafts.length !== 1 ? 's' : ''}
+          {filteredDrafts.length} {filteredDrafts.length !== 1 ? t.drafts.draftPlural : t.drafts.draftSingular}
         </span>
       </div>
 
@@ -176,7 +176,7 @@ export default function Drafts() {
             <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
               type="text"
-              placeholder="Search drafts..."
+              placeholder={t.drafts.searchPlaceholder}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full pl-9 pr-3 py-2 text-sm text-slate-700 bg-slate-50 border border-slate-200 rounded-lg placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-400 transition-all"
@@ -191,14 +191,14 @@ export default function Drafts() {
             }`}
           >
             <SlidersHorizontal size={14} />
-            Filters
+            {t.drafts.filtersButton}
           </button>
         </div>
 
         {showFilters && (
           <div className="px-4 pb-4 border-t border-slate-100 pt-3 flex flex-wrap items-center gap-4">
             <div className="flex items-center gap-2">
-              <span className="text-xs font-medium text-slate-500">Platform:</span>
+              <span className="text-xs font-medium text-slate-500">{t.drafts.platformLabel}</span>
               {(['all', 'twitter', 'linkedin'] as const).map((p) => (
                 <button
                   key={p}
@@ -209,23 +209,23 @@ export default function Drafts() {
                       : 'border-slate-200 text-slate-500 hover:bg-slate-50'
                   }`}
                 >
-                  {p === 'all' ? 'All' : p === 'twitter' ? 'X (Twitter)' : 'LinkedIn'}
+                  {p === 'all' ? t.drafts.platformAll : p === 'twitter' ? t.common.xTwitter : t.common.linkedin}
                 </button>
               ))}
             </div>
 
             {uniqueTones.length > 1 && (
               <div className="flex items-center gap-2">
-                <span className="text-xs font-medium text-slate-500">Tone:</span>
+                <span className="text-xs font-medium text-slate-500">{t.drafts.toneLabel}</span>
                 <select
                   value={filterTone}
                   onChange={(e) => setFilterTone(e.target.value)}
                   className="text-xs px-2 py-1 border border-slate-200 rounded-md text-slate-600 bg-white focus:outline-none focus:ring-1 focus:ring-teal-500/30"
                 >
-                  <option value="all">All Tones</option>
-                  {uniqueTones.map((t) => (
-                    <option key={t} value={t}>
-                      {t}
+                  <option value="all">{t.drafts.allTones}</option>
+                  {uniqueTones.map((tone) => (
+                    <option key={tone} value={tone}>
+                      {tone}
                     </option>
                   ))}
                 </select>
@@ -233,11 +233,11 @@ export default function Drafts() {
             )}
 
             <div className="flex items-center gap-2 ml-auto">
-              <span className="text-xs font-medium text-slate-500">Sort by:</span>
+              <span className="text-xs font-medium text-slate-500">{t.drafts.sortBy}</span>
               {([
-                { field: 'created_at' as SortField, label: 'Date' },
-                { field: 'platform' as SortField, label: 'Platform' },
-                { field: 'tone' as SortField, label: 'Tone' },
+                { field: 'created_at' as SortField, label: t.drafts.sortDate },
+                { field: 'platform' as SortField, label: t.drafts.sortPlatform },
+                { field: 'tone' as SortField, label: t.drafts.sortTone },
               ]).map(({ field, label }) => (
                 <button
                   key={field}
@@ -268,14 +268,10 @@ export default function Drafts() {
         <div className="text-center py-20">
           <FileText size={40} className="mx-auto text-slate-300 mb-3" />
           <p className="text-sm font-medium text-slate-500">
-            {drafts.length === 0
-              ? 'No saved drafts yet'
-              : 'No drafts match your filters'}
+            {drafts.length === 0 ? t.drafts.emptyNoSaved : t.drafts.emptyNoMatch}
           </p>
           <p className="text-xs text-slate-400 mt-1">
-            {drafts.length === 0
-              ? 'Generate posts and save your favorites from the Post Generator.'
-              : 'Try adjusting your search or filter criteria.'}
+            {drafts.length === 0 ? t.drafts.emptyNoSavedSub : t.drafts.emptyNoMatchSub}
           </p>
         </div>
       ) : (
@@ -297,7 +293,7 @@ export default function Drafts() {
                         <Linkedin size={13} className="text-blue-600" />
                       )}
                       <span className="text-xs font-medium text-slate-600">
-                        {draft.platform === 'twitter' ? 'X (Twitter)' : 'LinkedIn'}
+                        {draft.platform === 'twitter' ? t.common.xTwitter : t.common.linkedin}
                       </span>
                     </div>
                     <span className="w-px h-3 bg-slate-200" />
@@ -337,14 +333,14 @@ export default function Drafts() {
                         ) : (
                           <Save size={12} />
                         )}
-                        Save Changes
+                        {t.drafts.saveChanges}
                       </button>
                       <button
                         onClick={cancelEditing}
                         className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50 transition-all"
                       >
                         <XIcon size={12} />
-                        Cancel
+                        {t.drafts.cancel}
                       </button>
                     </>
                   ) : (
@@ -354,7 +350,7 @@ export default function Drafts() {
                         className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50 transition-all"
                       >
                         <Pencil size={12} />
-                        Edit
+                        {t.drafts.edit}
                       </button>
                       <button
                         onClick={() => handleCopy(draft.content, draft.id)}
@@ -363,12 +359,12 @@ export default function Drafts() {
                         {copiedId === draft.id ? (
                           <>
                             <Check size={12} className="text-teal-600" />
-                            <span className="text-teal-600">Copied</span>
+                            <span className="text-teal-600">{t.drafts.copied}</span>
                           </>
                         ) : (
                           <>
                             <Copy size={12} />
-                            Copy
+                            {t.drafts.copy}
                           </>
                         )}
                       </button>
@@ -383,7 +379,7 @@ export default function Drafts() {
                           ) : (
                             <CheckCircle2 size={12} />
                           )}
-                          Mark As Posted
+                          {t.drafts.markAsPosted}
                         </button>
                         <button
                           onClick={() => handleDelete(draft.id)}
@@ -395,7 +391,7 @@ export default function Drafts() {
                           ) : (
                             <Trash2 size={12} />
                           )}
-                          Delete
+                          {t.drafts.delete}
                         </button>
                       </div>
                     </>

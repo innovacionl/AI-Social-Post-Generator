@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Sparkles, Plus, Check, Loader2 } from 'lucide-react';
 import { supabase, supabaseConfigured, supabaseUrl, supabaseAnonKey } from '../lib/supabase';
+import { useI18n } from '../lib/i18n';
 
 const STORAGE_KEY_CAREER = 'topics_career';
 const STORAGE_KEY_INDUSTRY = 'topics_industry';
@@ -18,6 +19,7 @@ function loadSession<T>(key: string, fallback: T): T {
 }
 
 export default function TopicChoice() {
+  const { t } = useI18n();
   const [career, setCareer] = useState(() => loadSession(STORAGE_KEY_CAREER, ''));
   const [industry, setIndustry] = useState(() => loadSession(STORAGE_KEY_INDUSTRY, ''));
   const [topic, setTopic] = useState(() => loadSession(STORAGE_KEY_TOPIC, ''));
@@ -52,7 +54,7 @@ export default function TopicChoice() {
 
   async function handleGenerateQuestions() {
     if (!career.trim() || !industry.trim()) {
-      setError('Please fill in both your career and industry.');
+      setError(t.topicChoice.errorFillBoth);
       return;
     }
 
@@ -78,13 +80,13 @@ export default function TopicChoice() {
 
       if (!response.ok) {
         const data = await response.json();
-        throw new Error(data.error || 'Failed to generate questions');
+        throw new Error(data.error || t.topicChoice.errorGeneric);
       }
 
       const data = await response.json();
       setQuestions(data.questions || []);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Something went wrong. Please try again.');
+      setError(err instanceof Error ? err.message : t.topicChoice.errorGeneric);
     } finally {
       setLoading(false);
     }
@@ -104,7 +106,7 @@ export default function TopicChoice() {
       if (insertError) throw insertError;
       setAddedQuestions((prev) => new Set([...prev, index]));
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to add to research.');
+      setError(err instanceof Error ? err.message : t.topicChoice.errorFailed);
     } finally {
       setAddingIndex(null);
     }
@@ -113,51 +115,50 @@ export default function TopicChoice() {
   return (
     <div className="p-8 max-w-4xl mx-auto">
       <div className="mb-8">
-        <h1 className="text-2xl font-bold text-slate-900">Topic Choice</h1>
-        <p className="text-slate-500 mt-1">
-          Describe your background and let AI generate research questions for compelling content.
-        </p>
+        <h1 className="text-2xl font-bold text-slate-900">{t.topicChoice.title}</h1>
+        <p className="text-slate-500 mt-1">{t.topicChoice.subtitle}</p>
       </div>
 
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6 space-y-5">
         <div>
           <label htmlFor="career" className="block text-sm font-medium text-slate-700 mb-1.5">
-            Career / Role
+            {t.topicChoice.careerLabel}
           </label>
           <input
             id="career"
             type="text"
             value={career}
             onChange={(e) => setCareer(e.target.value)}
-            placeholder="e.g., Senior Product Manager at a SaaS company"
+            placeholder={t.topicChoice.careerPlaceholder}
             className="w-full px-4 py-2.5 rounded-lg border border-slate-300 text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 outline-none transition-shadow"
           />
         </div>
 
         <div>
           <label htmlFor="industry" className="block text-sm font-medium text-slate-700 mb-1.5">
-            Industry
+            {t.topicChoice.industryLabel}
           </label>
           <input
             id="industry"
             type="text"
             value={industry}
             onChange={(e) => setIndustry(e.target.value)}
-            placeholder="e.g., Enterprise B2B Software / FinTech"
+            placeholder={t.topicChoice.industryPlaceholder}
             className="w-full px-4 py-2.5 rounded-lg border border-slate-300 text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 outline-none transition-shadow"
           />
         </div>
 
         <div>
           <label htmlFor="topic" className="block text-sm font-medium text-slate-700 mb-1.5">
-            Specific Topic <span className="text-slate-400 font-normal">(optional)</span>
+            {t.topicChoice.topicLabel}{' '}
+            <span className="text-slate-400 font-normal">{t.topicChoice.topicOptional}</span>
           </label>
           <input
             id="topic"
             type="text"
             value={topic}
             onChange={(e) => setTopic(e.target.value)}
-            placeholder="e.g., AI-driven personalization in onboarding flows"
+            placeholder={t.topicChoice.topicPlaceholder}
             className="w-full px-4 py-2.5 rounded-lg border border-slate-300 text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 outline-none transition-shadow"
           />
         </div>
@@ -176,12 +177,12 @@ export default function TopicChoice() {
           {loading ? (
             <>
               <Loader2 size={16} className="animate-spin" />
-              Generating...
+              {t.topicChoice.generating}
             </>
           ) : (
             <>
               <Sparkles size={16} />
-              Generate Questions
+              {t.topicChoice.generateButton}
             </>
           )}
         </button>
@@ -189,10 +190,8 @@ export default function TopicChoice() {
 
       {questions.length > 0 && (
         <div className="mt-8 space-y-3">
-          <h2 className="text-lg font-semibold text-slate-900">Generated Questions</h2>
-          <p className="text-sm text-slate-500 mb-4">
-            Click "Add to Research" to save a question for deeper exploration.
-          </p>
+          <h2 className="text-lg font-semibold text-slate-900">{t.topicChoice.generatedTitle}</h2>
+          <p className="text-sm text-slate-500 mb-4">{t.topicChoice.generatedSubtitle}</p>
           <div className="space-y-3">
             {questions.map((question, index) => (
               <div
@@ -212,17 +211,17 @@ export default function TopicChoice() {
                   {addedQuestions.has(index) ? (
                     <>
                       <Check size={14} />
-                      Added
+                      {t.topicChoice.added}
                     </>
                   ) : addingIndex === index ? (
                     <>
                       <Loader2 size={14} className="animate-spin" />
-                      Adding...
+                      {t.topicChoice.adding}
                     </>
                   ) : (
                     <>
                       <Plus size={14} />
-                      Add to Research
+                      {t.topicChoice.addToResearch}
                     </>
                   )}
                 </button>

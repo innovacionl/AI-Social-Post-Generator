@@ -11,6 +11,7 @@ import {
   ExternalLink,
   Info,
 } from 'lucide-react';
+import { useI18n } from '../lib/i18n';
 
 const SETUP_DISMISSED_KEY = 'postcraft_setup_dismissed';
 
@@ -37,6 +38,7 @@ interface SetupModalProps {
 }
 
 export default function SetupModal({ open, onClose }: SetupModalProps) {
+  const { t } = useI18n();
   const [step, setStep] = useState(1);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
@@ -65,11 +67,9 @@ export default function SetupModal({ open, onClose }: SetupModalProps) {
         <div className="flex items-start justify-between px-7 pt-6 pb-4">
           <div>
             <h2 className="text-xl font-semibold text-white tracking-tight">
-              Project Setup Guide
+              {t.setupModal.title}
             </h2>
-            <p className="text-sm text-slate-400 mt-1">
-              Get your own copy running in minutes
-            </p>
+            <p className="text-sm text-slate-400 mt-1">{t.setupModal.subtitle}</p>
           </div>
           <button
             onClick={onClose}
@@ -91,15 +91,13 @@ export default function SetupModal({ open, onClose }: SetupModalProps) {
           >
             <span
               className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
-                step === 1
-                  ? 'bg-teal-500 text-white'
-                  : 'bg-slate-700 text-slate-300'
+                step === 1 ? 'bg-teal-500 text-white' : 'bg-slate-700 text-slate-300'
               }`}
             >
               1
             </span>
             <GitFork size={15} />
-            Fork
+            {t.setupModal.stepFork}
           </button>
           <button
             onClick={() => setStep(2)}
@@ -111,15 +109,13 @@ export default function SetupModal({ open, onClose }: SetupModalProps) {
           >
             <span
               className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
-                step === 2
-                  ? 'bg-teal-500 text-white'
-                  : 'bg-slate-700 text-slate-300'
+                step === 2 ? 'bg-teal-500 text-white' : 'bg-slate-700 text-slate-300'
               }`}
             >
               2
             </span>
             <Import size={15} />
-            Import
+            {t.setupModal.stepImport}
           </button>
           <button
             onClick={() => setStep(3)}
@@ -131,15 +127,13 @@ export default function SetupModal({ open, onClose }: SetupModalProps) {
           >
             <span
               className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
-                step === 3
-                  ? 'bg-teal-500 text-white'
-                  : 'bg-slate-700 text-slate-300'
+                step === 3 ? 'bg-teal-500 text-white' : 'bg-slate-700 text-slate-300'
               }`}
             >
               3
             </span>
             <Key size={15} />
-            Add API Keys
+            {t.setupModal.stepApiKeys}
           </button>
         </div>
 
@@ -159,7 +153,7 @@ export default function SetupModal({ open, onClose }: SetupModalProps) {
                 onClick={() => setStep(2)}
                 className="flex items-center gap-2 px-5 py-2.5 bg-teal-600 hover:bg-teal-500 text-white text-sm font-medium rounded-lg transition-colors"
               >
-                Next: Import
+                {t.setupModal.nextImport}
                 <ChevronRight size={16} />
               </button>
             </>
@@ -170,13 +164,13 @@ export default function SetupModal({ open, onClose }: SetupModalProps) {
                 className="flex items-center gap-1.5 text-sm text-slate-400 hover:text-white transition-colors"
               >
                 <ChevronLeft size={16} />
-                Back
+                {t.setupModal.back}
               </button>
               <button
                 onClick={() => setStep(3)}
                 className="flex items-center gap-2 px-5 py-2.5 bg-teal-600 hover:bg-teal-500 text-white text-sm font-medium rounded-lg transition-colors"
               >
-                Next: API Keys
+                {t.setupModal.nextApiKeys}
                 <ChevronRight size={16} />
               </button>
             </>
@@ -187,13 +181,13 @@ export default function SetupModal({ open, onClose }: SetupModalProps) {
                 className="flex items-center gap-1.5 text-sm text-slate-400 hover:text-white transition-colors"
               >
                 <ChevronLeft size={16} />
-                Back
+                {t.setupModal.back}
               </button>
               <button
                 onClick={handleDone}
                 className="flex items-center gap-2 px-5 py-2.5 bg-teal-600 hover:bg-teal-500 text-white text-sm font-medium rounded-lg transition-colors"
               >
-                Done
+                {t.setupModal.done}
                 <Check size={16} />
               </button>
             </>
@@ -205,20 +199,18 @@ export default function SetupModal({ open, onClose }: SetupModalProps) {
 }
 
 function StepFork() {
+  const { t } = useI18n();
+  const f = t.setupModal.fork;
   return (
     <div className="space-y-4">
       <div className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-5">
-        <p className="text-sm font-medium text-slate-200 mb-4">
-          Fork the repository to your own GitHub account:
-        </p>
+        <p className="text-sm font-medium text-slate-200 mb-4">{f.intro}</p>
         <ol className="space-y-3">
           <li className="flex items-start gap-3">
             <span className="w-6 h-6 rounded-full bg-teal-600/20 text-teal-300 flex items-center justify-center text-xs font-bold shrink-0 mt-0.5">
               1
             </span>
-            <p className="text-sm text-slate-300 leading-relaxed">
-              Visit the repository link below.
-            </p>
+            <p className="text-sm text-slate-300 leading-relaxed">{f.step1}</p>
           </li>
           <li className="pl-9 -mt-1">
             <a
@@ -236,18 +228,16 @@ function StepFork() {
               2
             </span>
             <p className="text-sm text-slate-300 leading-relaxed">
-              Click the <strong className="text-white">"Fork"</strong> button in
-              the top-right area of the page (shown below).
+              {f.step2before}
+              <strong className="text-white">{f.step2fork}</strong>
+              {f.step2after}
             </p>
           </li>
           <li className="flex items-start gap-3">
             <span className="w-6 h-6 rounded-full bg-teal-600/20 text-teal-300 flex items-center justify-center text-xs font-bold shrink-0 mt-0.5">
               3
             </span>
-            <p className="text-sm text-slate-300 leading-relaxed">
-              Confirm the fork. This creates a copy of the repository under your
-              GitHub account.
-            </p>
+            <p className="text-sm text-slate-300 leading-relaxed">{f.step3}</p>
           </li>
         </ol>
       </div>
@@ -264,28 +254,28 @@ function StepFork() {
 }
 
 function StepImport() {
+  const { t } = useI18n();
+  const im = t.setupModal.import;
   return (
     <div className="space-y-4">
       <div className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-5">
-        <p className="text-sm font-medium text-slate-200 mb-4">
-          Import your forked repository into Bolt:
-        </p>
+        <p className="text-sm font-medium text-slate-200 mb-4">{im.intro}</p>
         <ol className="space-y-3">
           <li className="flex items-start gap-3">
             <span className="w-6 h-6 rounded-full bg-teal-600/20 text-teal-300 flex items-center justify-center text-xs font-bold shrink-0 mt-0.5">
               1
             </span>
             <p className="text-sm text-slate-300 leading-relaxed">
-              Go to{' '}
+              {im.step1before}
               <a
                 href="https://bolt.new"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-teal-400 hover:text-teal-300 font-medium transition-colors"
               >
-                bolt.new
-              </a>{' '}
-              and look at the bottom of the prompt area.
+                {im.step1link}
+              </a>
+              {im.step1after}
             </p>
           </li>
           <li className="flex items-start gap-3">
@@ -293,18 +283,16 @@ function StepImport() {
               2
             </span>
             <p className="text-sm text-slate-300 leading-relaxed">
-              Click the <strong className="text-white">"GitHub"</strong> button
-              (shown below).
+              {im.step2before}
+              <strong className="text-white">{im.step2github}</strong>
+              {im.step2after}
             </p>
           </li>
           <li className="flex items-start gap-3">
             <span className="w-6 h-6 rounded-full bg-teal-600/20 text-teal-300 flex items-center justify-center text-xs font-bold shrink-0 mt-0.5">
               3
             </span>
-            <p className="text-sm text-slate-300 leading-relaxed">
-              Select your forked repository from the list. Bolt will create a new
-              project with all the files ready to go.
-            </p>
+            <p className="text-sm text-slate-300 leading-relaxed">{im.step3}</p>
           </li>
         </ol>
       </div>
@@ -317,11 +305,7 @@ function StepImport() {
         />
       </div>
 
-      <p className="text-xs text-slate-500 leading-relaxed">
-        After importing, your new project will open with all files, database
-        tables, and edge functions already set up. You just need to add your own
-        API keys (Step 3).
-      </p>
+      <p className="text-xs text-slate-500 leading-relaxed">{im.note}</p>
     </div>
   );
 }
@@ -333,30 +317,28 @@ function StepKeys({
   copiedKey: string | null;
   onCopy: (name: string) => void;
 }) {
+  const { t } = useI18n();
+  const k = t.setupModal.keys;
   return (
     <div className="space-y-5">
       <div className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-5">
-        <p className="text-sm font-medium text-slate-200 mb-3">
-          Add your API keys as secrets:
-        </p>
+        <p className="text-sm font-medium text-slate-200 mb-3">{k.intro}</p>
         <ol className="space-y-2.5">
           <li className="flex items-start gap-3">
             <span className="w-6 h-6 rounded-full bg-teal-600/20 text-teal-300 flex items-center justify-center text-xs font-bold shrink-0 mt-0.5">
               1
             </span>
             <p className="text-sm text-slate-300 leading-relaxed">
-              In your new project, open{' '}
-              <strong className="text-white">Settings</strong> and navigate to the{' '}
-              <strong className="text-white">Secrets</strong> section.
+              {k.step1before}
+              <strong className="text-white">{k.step1settings}</strong>
+              {k.step1after}
             </p>
           </li>
           <li className="flex items-start gap-3">
             <span className="w-6 h-6 rounded-full bg-teal-600/20 text-teal-300 flex items-center justify-center text-xs font-bold shrink-0 mt-0.5">
               2
             </span>
-            <p className="text-sm text-slate-300">
-              Add the following as secrets with your own keys.
-            </p>
+            <p className="text-sm text-slate-300">{k.step2}</p>
           </li>
         </ol>
       </div>
@@ -370,9 +352,7 @@ function StepKeys({
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2">
                 <Key size={14} className="text-teal-400" />
-                <span className="text-sm font-medium text-slate-200">
-                  {label}
-                </span>
+                <span className="text-sm font-medium text-slate-200">{label}</span>
               </div>
               <button
                 onClick={() => onCopy(name)}
@@ -381,20 +361,18 @@ function StepKeys({
                 {copiedKey === name ? (
                   <>
                     <Check size={13} className="text-green-400" />
-                    <span className="text-green-400">Copied</span>
+                    <span className="text-green-400">{k.copied}</span>
                   </>
                 ) : (
                   <>
                     <Copy size={13} />
-                    Copy name
+                    {k.copyName}
                   </>
                 )}
               </button>
             </div>
             <div className="bg-slate-950/60 rounded-lg px-3 py-2 mb-2.5">
-              <code className="text-xs font-mono text-amber-300">
-                {name}=your_key_here
-              </code>
+              <code className="text-xs font-mono text-amber-300">{name}=your_key_here</code>
             </div>
             <p className="text-xs text-slate-400 mb-2">{description}</p>
             <a
@@ -413,12 +391,8 @@ function StepKeys({
       <div className="flex items-start gap-2.5 bg-teal-500/10 border border-teal-500/20 rounded-xl p-4">
         <Info size={16} className="text-teal-400 mt-0.5 shrink-0" />
         <div>
-          <p className="text-xs font-semibold text-teal-300">Important</p>
-          <p className="text-xs text-slate-400 mt-1 leading-relaxed">
-            After adding your secrets, the edge functions will automatically pick
-            them up. You may need to redeploy the functions or restart the project
-            for changes to take effect.
-          </p>
+          <p className="text-xs font-semibold text-teal-300">{k.importantTitle}</p>
+          <p className="text-xs text-slate-400 mt-1 leading-relaxed">{k.importantBody}</p>
         </div>
       </div>
     </div>
