@@ -13,6 +13,8 @@ const languageNames: Record<string, string> = {
   en: "English",
 };
 
+const DEFAULT_MODEL = "openai/gpt-4o-mini";
+
 const DEFAULT_SYSTEM = `You are an expert social media content creator. You craft viral, engaging posts from research insights.
 
 The user's chosen tone/style: {{tone}}
@@ -95,7 +97,7 @@ Deno.serve(async (req: Request) => {
     const { data: promptRows } = await supabase
       .from("prompt_settings")
       .select("key, value")
-      .in("key", ["post_system", "post_user"]);
+      .in("key", ["post_system", "post_user", "post_model"]);
     const custom: Record<string, string> = {};
     (promptRows ?? []).forEach(({ key, value }: { key: string; value: string }) => {
       custom[key] = value;
@@ -138,7 +140,7 @@ Deno.serve(async (req: Request) => {
         "Authorization": `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: "openai/gpt-4o-mini",
+        model: custom.post_model ?? DEFAULT_MODEL,
         max_tokens: 4096,
         messages: [
           { role: "system", content: systemPrompt },

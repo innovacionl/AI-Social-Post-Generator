@@ -12,6 +12,8 @@ const languageNames: Record<string, string> = {
   en: "English",
 };
 
+const DEFAULT_MODEL = "meta-llama/llama-3.1-8b-instruct";
+
 const DEFAULT_SYSTEM = `You are a research strategist who helps professionals identify high-value research questions relevant to their career and industry. Generate questions that are:
 - Timely and relevant to current trends (2024-2025)
 - Specific enough to research effectively
@@ -68,7 +70,7 @@ Deno.serve(async (req: Request) => {
     const { data: promptRows } = await supabase
       .from("prompt_settings")
       .select("key, value")
-      .in("key", ["questions_system", "questions_user"]);
+      .in("key", ["questions_system", "questions_user", "questions_model"]);
 
     const custom: Record<string, string> = {};
     (promptRows ?? []).forEach(({ key, value }: { key: string; value: string }) => {
@@ -95,7 +97,7 @@ Deno.serve(async (req: Request) => {
         "Authorization": `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: "meta-llama/llama-3.1-8b-instruct",
+        model: custom.questions_model ?? DEFAULT_MODEL,
         max_tokens: 1024,
         messages: [
           { role: "system", content: systemPrompt },

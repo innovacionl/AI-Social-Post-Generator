@@ -8,13 +8,22 @@ import {
   Check,
   Loader2,
   AlertCircle,
+  Cpu,
 } from 'lucide-react';
 import { supabase, supabaseConfigured } from '../lib/supabase';
 import { useI18n } from '../lib/i18n';
 
-// ─── Default prompt templates ──────────────────────────────────────────────
+// ─── Default values ────────────────────────────────────────────────────────
+
+export const DEFAULT_MODELS: Record<string, string> = {
+  questions_model: 'meta-llama/llama-3.1-8b-instruct',
+  research_model: 'openai/gpt-4o-mini',
+  post_model: 'openai/gpt-4o-mini',
+};
 
 export const DEFAULTS: Record<string, string> = {
+  ...DEFAULT_MODELS,
+
   questions_system: `You are a research strategist who helps professionals identify high-value research questions relevant to their career and industry. Generate questions that are:
 - Timely and relevant to current trends (2024-2025)
 - Specific enough to research effectively
@@ -90,6 +99,23 @@ Write 5 compelling posts in a "{{tone}}" tone that will resonate with profession
 Remember: all posts must be written in {{languageName}}.`,
 };
 
+// ─── Popular OpenRouter models ─────────────────────────────────────────────
+
+const POPULAR_MODELS = [
+  { id: 'meta-llama/llama-3.1-8b-instruct',  label: 'Llama 3.1 8B Instruct — snel & goedkoop' },
+  { id: 'meta-llama/llama-3.1-70b-instruct', label: 'Llama 3.1 70B Instruct — open source, capable' },
+  { id: 'meta-llama/llama-3.3-70b-instruct', label: 'Llama 3.3 70B Instruct — nieuwste Llama' },
+  { id: 'openai/gpt-4o-mini',                label: 'GPT-4o Mini — snel, kostenefficiënt' },
+  { id: 'openai/gpt-4o',                     label: 'GPT-4o — krachtig, veelzijdig' },
+  { id: 'openai/gpt-4.1-mini',               label: 'GPT-4.1 Mini — nieuwste kleine GPT' },
+  { id: 'anthropic/claude-3.5-sonnet',       label: 'Claude 3.5 Sonnet — hoge kwaliteit' },
+  { id: 'anthropic/claude-3-haiku',          label: 'Claude 3 Haiku — snel & goedkoop' },
+  { id: 'google/gemini-flash-1.5',           label: 'Gemini Flash 1.5 — snel' },
+  { id: 'google/gemini-pro-1.5',             label: 'Gemini Pro 1.5 — uitgebreid' },
+  { id: 'mistralai/mistral-7b-instruct',     label: 'Mistral 7B — goedkoop' },
+  { id: 'mistralai/mistral-nemo',            label: 'Mistral Nemo — compact & capable' },
+];
+
 // ─── Placeholder definitions per prompt key ────────────────────────────────
 
 interface Placeholder {
@@ -114,13 +140,13 @@ const PLACEHOLDERS: Record<string, Placeholder[]> = {
     { name: '{{question}}', description: 'Onderzoeksvraag' },
     { name: '{{career}}', description: 'Carrière / functie' },
     { name: '{{industry}}', description: 'Branche' },
-    { name: '{{languageName}}', description: 'Taalaam' },
+    { name: '{{languageName}}', description: 'Taalnaam' },
   ],
   post_system: [
     { name: '{{tone}}', description: 'Geselecteerde toon' },
     { name: '{{customStyleSection}}', description: 'Aangepaste stijlinstructies' },
     { name: '{{platformGuide}}', description: 'Platformregels (Twitter/LinkedIn)' },
-    { name: '{{languageName}}', description: 'Taalaam' },
+    { name: '{{languageName}}', description: 'Taalnaam' },
   ],
   post_user: [
     { name: '{{platformLabel}}', description: 'Platform naam' },
@@ -129,7 +155,7 @@ const PLACEHOLDERS: Record<string, Placeholder[]> = {
     { name: '{{industry}}', description: 'Branche' },
     { name: '{{researchContext}}', description: 'Samenvatting onderzoeksresultaten' },
     { name: '{{tone}}', description: 'Geselecteerde toon' },
-    { name: '{{languageName}}', description: 'Taalaam' },
+    { name: '{{languageName}}', description: 'Taalnaam' },
   ],
 };
 
@@ -142,12 +168,9 @@ interface Section {
   labelEn: string;
   descriptionNl: string;
   descriptionEn: string;
+  modelKey: string;
   systemKey: string;
   userKey: string;
-  systemLabelNl: string;
-  userLabelNl: string;
-  systemLabelEn: string;
-  userLabelEn: string;
 }
 
 const SECTIONS: Section[] = [
@@ -158,12 +181,9 @@ const SECTIONS: Section[] = [
     labelEn: 'Generate Questions',
     descriptionNl: 'Prompts waarmee AI onderzoeksvragen genereert op basis van carrière, branche en onderwerp.',
     descriptionEn: 'Prompts used to generate research questions from career, industry and topic context.',
+    modelKey: 'questions_model',
     systemKey: 'questions_system',
     userKey: 'questions_user',
-    systemLabelNl: 'Systeemprompt',
-    userLabelNl: 'Gebruikersprompt',
-    systemLabelEn: 'System Prompt',
-    userLabelEn: 'User Prompt',
   },
   {
     id: 'research',
@@ -172,12 +192,9 @@ const SECTIONS: Section[] = [
     labelEn: 'Conduct Research',
     descriptionNl: 'Prompts waarmee AI een uitgebreid onderzoeksrapport schrijft over een vraag.',
     descriptionEn: 'Prompts used to produce a comprehensive research report for a given question.',
+    modelKey: 'research_model',
     systemKey: 'research_system',
     userKey: 'research_user',
-    systemLabelNl: 'Systeemprompt',
-    userLabelNl: 'Gebruikersprompt',
-    systemLabelEn: 'System Prompt',
-    userLabelEn: 'User Prompt',
   },
   {
     id: 'posts',
@@ -186,14 +203,67 @@ const SECTIONS: Section[] = [
     labelEn: 'Generate Posts',
     descriptionNl: 'Prompts waarmee AI 5 sociale mediaposts maakt op basis van onderzoeksresultaten.',
     descriptionEn: 'Prompts used to generate 5 social media post variations from research findings.',
+    modelKey: 'post_model',
     systemKey: 'post_system',
     userKey: 'post_user',
-    systemLabelNl: 'Systeemprompt',
-    userLabelNl: 'Gebruikersprompt',
-    systemLabelEn: 'System Prompt',
-    userLabelEn: 'User Prompt',
   },
 ];
+
+// ─── ModelSelector component ───────────────────────────────────────────────
+
+interface ModelSelectorProps {
+  value: string;
+  onChange: (val: string) => void;
+  language: string;
+  listId: string;
+}
+
+function ModelSelector({ value, onChange, language, listId }: ModelSelectorProps) {
+  return (
+    <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
+      <div className="flex items-center gap-2 mb-4">
+        <Cpu size={15} className="text-slate-500" />
+        <span className="text-sm font-semibold text-slate-700">
+          {language === 'nl' ? 'AI-model' : 'AI Model'}
+        </span>
+        <span className="ml-auto text-xs text-slate-400">
+          {language === 'nl' ? 'Via OpenRouter' : 'Via OpenRouter'}
+        </span>
+      </div>
+
+      <input
+        type="text"
+        list={listId}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={language === 'nl' ? 'Voer model-ID in of kies uit de lijst…' : 'Enter model ID or choose from list…'}
+        className="w-full px-4 py-2.5 text-sm text-slate-700 font-mono bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-400 transition-all"
+      />
+      <datalist id={listId}>
+        {POPULAR_MODELS.map((m) => (
+          <option key={m.id} value={m.id} label={m.label} />
+        ))}
+      </datalist>
+
+      <div className="mt-3 flex flex-wrap gap-1.5">
+        {POPULAR_MODELS.map((m) => (
+          <button
+            key={m.id}
+            type="button"
+            onClick={() => onChange(m.id)}
+            className={`px-2.5 py-1 text-xs font-mono rounded-md border transition-all ${
+              value === m.id
+                ? 'bg-teal-600 text-white border-teal-600'
+                : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300 hover:text-slate-700'
+            }`}
+          >
+            {m.id.split('/')[1] ?? m.id}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 // ─── PromptEditor component ────────────────────────────────────────────────
 
@@ -210,10 +280,7 @@ function PromptEditor({ label, promptKey, value, onChange }: PromptEditorProps) 
 
   function insertPlaceholder(ph: string) {
     const ta = textareaRef.current;
-    if (!ta) {
-      onChange(value + ph);
-      return;
-    }
+    if (!ta) { onChange(value + ph); return; }
     const start = ta.selectionStart ?? value.length;
     const end = ta.selectionEnd ?? value.length;
     const next = value.slice(0, start) + ph + value.slice(end);
@@ -230,7 +297,9 @@ function PromptEditor({ label, promptKey, value, onChange }: PromptEditorProps) 
       <div className="flex items-center justify-between">
         <span className="text-sm font-semibold text-slate-700">{label}</span>
         {placeholders.length > 0 && (
-          <span className="text-xs text-slate-400">Klik op een variabele om in te voegen</span>
+          <span className="text-xs text-slate-400">
+            Klik op een variabele om in te voegen
+          </span>
         )}
       </div>
 
@@ -256,7 +325,7 @@ function PromptEditor({ label, promptKey, value, onChange }: PromptEditorProps) 
         onChange={(e) => onChange(e.target.value)}
         rows={10}
         spellCheck={false}
-        className="w-full px-4 py-3 text-sm text-slate-700 font-mono bg-slate-50 border border-slate-200 rounded-xl placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-400 transition-all resize-y leading-relaxed"
+        className="w-full px-4 py-3 text-sm text-slate-700 font-mono bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-400 transition-all resize-y leading-relaxed"
       />
     </div>
   );
@@ -296,6 +365,7 @@ export default function Settings() {
   function handleReset(section: Section) {
     setValues((prev) => ({
       ...prev,
+      [section.modelKey]: DEFAULTS[section.modelKey],
       [section.systemKey]: DEFAULTS[section.systemKey],
       [section.userKey]: DEFAULTS[section.userKey],
     }));
@@ -306,6 +376,7 @@ export default function Settings() {
     setSavingTab(section.id);
     setSaveError('');
     const rows = [
+      { key: section.modelKey, value: values[section.modelKey] ?? DEFAULTS[section.modelKey], updated_at: new Date().toISOString() },
       { key: section.systemKey, value: values[section.systemKey], updated_at: new Date().toISOString() },
       { key: section.userKey, value: values[section.userKey], updated_at: new Date().toISOString() },
     ];
@@ -320,22 +391,22 @@ export default function Settings() {
   }
 
   const section = SECTIONS.find((s) => s.id === activeTab)!;
-  const label = (s: Section) => language === 'nl' ? s.labelNl : s.labelEn;
-  const desc = (s: Section) => language === 'nl' ? s.descriptionNl : s.descriptionEn;
-  const sysLabel = language === 'nl' ? section.systemLabelNl : section.systemLabelEn;
-  const usrLabel = language === 'nl' ? section.userLabelNl : section.userLabelEn;
+  const sectionLabel = (s: Section) => language === 'nl' ? s.labelNl : s.labelEn;
+  const sectionDesc = (s: Section) => language === 'nl' ? s.descriptionNl : s.descriptionEn;
+
+  const sysLabel = language === 'nl' ? 'Systeemprompt' : 'System Prompt';
+  const usrLabel = language === 'nl' ? 'Gebruikersprompt' : 'User Prompt';
 
   return (
     <div className="p-8 max-w-4xl mx-auto">
-      {/* Page header */}
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-slate-900">
           {language === 'nl' ? 'Instellingen' : 'Settings'}
         </h1>
         <p className="text-slate-500 mt-1">
           {language === 'nl'
-            ? 'Bewerk de AI-prompts die in elke stap worden gebruikt.'
-            : 'Edit the AI prompts used in each step.'}
+            ? 'Pas het AI-model en de prompts per stap aan.'
+            : 'Customize the AI model and prompts used in each step.'}
         </p>
       </div>
 
@@ -361,7 +432,7 @@ export default function Settings() {
                   }`}
                 >
                   <Icon size={15} />
-                  <span className="hidden sm:inline">{label(s)}</span>
+                  <span className="hidden sm:inline">{sectionLabel(s)}</span>
                 </button>
               );
             })}
@@ -370,11 +441,18 @@ export default function Settings() {
           {/* Section description */}
           <div className="flex items-start gap-3 mb-6 p-4 bg-slate-50 border border-slate-200 rounded-xl">
             <section.icon size={16} className="text-teal-600 mt-0.5 shrink-0" />
-            <p className="text-sm text-slate-600">{desc(section)}</p>
+            <p className="text-sm text-slate-600">{sectionDesc(section)}</p>
           </div>
 
-          {/* Prompt editors */}
-          <div className="space-y-8">
+          {/* Model selector + prompt editors */}
+          <div className="space-y-6">
+            <ModelSelector
+              value={values[section.modelKey] ?? DEFAULTS[section.modelKey]}
+              onChange={(val) => handleChange(section.modelKey, val)}
+              language={language}
+              listId={`model-list-${section.id}`}
+            />
+
             <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
               <PromptEditor
                 label={sysLabel}
@@ -422,20 +500,11 @@ export default function Settings() {
               } disabled:opacity-60 disabled:cursor-not-allowed`}
             >
               {savingTab === section.id ? (
-                <>
-                  <Loader2 size={14} className="animate-spin" />
-                  {language === 'nl' ? 'Opslaan...' : 'Saving...'}
-                </>
+                <><Loader2 size={14} className="animate-spin" />{language === 'nl' ? 'Opslaan...' : 'Saving...'}</>
               ) : savedTab === section.id ? (
-                <>
-                  <Check size={14} />
-                  {language === 'nl' ? 'Opgeslagen' : 'Saved'}
-                </>
+                <><Check size={14} />{language === 'nl' ? 'Opgeslagen' : 'Saved'}</>
               ) : (
-                <>
-                  <Save size={14} />
-                  {language === 'nl' ? 'Wijzigingen opslaan' : 'Save changes'}
-                </>
+                <><Save size={14} />{language === 'nl' ? 'Wijzigingen opslaan' : 'Save changes'}</>
               )}
             </button>
           </div>

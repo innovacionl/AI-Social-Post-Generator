@@ -13,6 +13,8 @@ const languageNames: Record<string, string> = {
   en: "English",
 };
 
+const DEFAULT_MODEL = "openai/gpt-4o-mini";
+
 const DEFAULT_SYSTEM = `You are an expert research analyst. Write a thorough, well-structured research report based on your knowledge up to your training cutoff.
 
 IMPORTANT: Write the entire report in {{languageName}}. All headings, analysis, conclusions, and any references must be in {{languageName}}.
@@ -81,7 +83,7 @@ Deno.serve(async (req: Request) => {
       const { data: promptRows } = await supabase
         .from("prompt_settings")
         .select("key, value")
-        .in("key", ["research_system", "research_user"]);
+        .in("key", ["research_system", "research_user", "research_model"]);
       const custom: Record<string, string> = {};
       (promptRows ?? []).forEach(({ key, value }: { key: string; value: string }) => {
         custom[key] = value;
@@ -91,6 +93,7 @@ Deno.serve(async (req: Request) => {
         topic, apiKey, language,
         custom.research_system ?? DEFAULT_SYSTEM,
         custom.research_user ?? DEFAULT_USER,
+        custom.research_model ?? DEFAULT_MODEL,
       );
 
       if (researchError || !summary) {
@@ -142,6 +145,7 @@ async function runResearch(
   language: string,
   systemTemplate: string,
   userTemplate: string,
+  model: string,
 ): Promise<{ summary?: string; error?: string }> {
   const langName = languageNames[language] || "English";
 
@@ -165,7 +169,7 @@ async function runResearch(
         "Authorization": `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: "openai/gpt-4o-mini",
+        model: model,
         max_tokens: 4096,
         messages: [
           { role: "system", content: systemPrompt },
