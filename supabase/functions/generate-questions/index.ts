@@ -58,7 +58,7 @@ The questions should help them discover insights they can share as thought leade
 
 Remember: respond entirely in ${langName}.`;
 
-    // Model: google/gemini-2.0-flash-001 — confirmed valid, $0.10/$0.40 per M tokens; cheapest reliable option for structured JSON
+    // Model: meta-llama/llama-3.1-8b-instruct — confirmed working, cheapest option for simple structured JSON output
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -66,7 +66,7 @@ Remember: respond entirely in ${langName}.`;
         "Authorization": `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: "google/gemini-2.0-flash-001",
+        model: "meta-llama/llama-3.1-8b-instruct",
         max_tokens: 1024,
         messages: [
           { role: "system", content: systemPrompt },
