@@ -10,6 +10,11 @@ const corsHeaders = {
 
 const GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta/interactions";
 
+const languageNames: Record<string, string> = {
+  nl: "Dutch (Nederlands)",
+  en: "English",
+};
+
 function respond(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
@@ -22,7 +27,7 @@ Deno.serve(async (req: Request) => {
     return new Response(null, { status: 200, headers: corsHeaders });
   }
   try {
-    const { topicId, action = "start" } = await req.json();
+    const { topicId, action = "start", language = "nl" } = await req.json();
     if (!topicId) return respond({ error: "topicId is required" }, 400);
 
     const supabase = createClient(
@@ -36,7 +41,7 @@ Deno.serve(async (req: Request) => {
       .from("research_topics").select("*").eq("id", topicId).maybeSingle();
     if (fe || !topic) return respond({ error: "Topic not found" }, 404);
 
-    if (action === "start") return await doStart(supabase, topic, geminiKey);
+    if (action === "start") return await doStart(supabase, topic, geminiKey, language);
     if (action === "poll") return await doPoll(supabase, topic, geminiKey);
     return respond({ error: "Invalid action" }, 400);
   } catch (e) {
@@ -44,7 +49,9 @@ Deno.serve(async (req: Request) => {
   }
 });
 
-async function doStart(sb: any, topic: any, key: string) {
+async function doStart(sb: any, topic: any, key: string, language: string) {
+  const langName = languageNames[language] || "English";
+
   const prompt = `Conduct thorough, in-depth research on the following question. Provide a comprehensive analysis with real data, statistics, expert perspectives, current trends, and actionable insights.
 
 Question: ${topic.question}
@@ -52,6 +59,8 @@ Question: ${topic.question}
 Context:
 - Professional Role: ${topic.career}
 - Industry: ${topic.industry}
+
+IMPORTANT: Write the entire research report in ${langName}. All section headings, analysis, conclusions, and citations must be in ${langName}.
 
 Format the output as a detailed research report with clear sections. Include specific data points, statistics, and cite your sources.`;
 

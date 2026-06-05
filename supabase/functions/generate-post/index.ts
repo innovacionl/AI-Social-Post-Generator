@@ -8,6 +8,11 @@ const corsHeaders = {
     "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
+const languageNames: Record<string, string> = {
+  nl: "Dutch (Nederlands)",
+  en: "English",
+};
+
 function respond(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
@@ -21,7 +26,7 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    const { topicId, platform, tone, customStyle } = await req.json();
+    const { topicId, platform, tone, customStyle, language = "nl" } = await req.json();
 
     if (!topicId || !platform || !tone) {
       return respond(
@@ -50,6 +55,8 @@ Deno.serve(async (req: Request) => {
       return respond({ error: "Anthropic API key not configured" }, 500);
     }
 
+    const langName = languageNames[language] || "English";
+
     const platformGuide =
       platform === "twitter"
         ? "X (Twitter) posts: Maximum 280 characters each. Concise, punchy, attention-grabbing. Use line breaks for readability. Hashtags are optional."
@@ -65,7 +72,9 @@ Deno.serve(async (req: Request) => {
       customStyleSection +
       "\n\nPlatform rules:\n" +
       platformGuide +
-      "\n\nYou must generate exactly 5 distinct post variations based on the research provided. Each variation should take a different angle:\n1. A strong hook / attention-grabber opening\n2. A data-led / statistics-focused approach\n3. A storytelling / personal narrative angle\n4. A contrarian / challenging conventional wisdom take\n5. A call-to-action / community engagement approach\n\nSeparate each post with exactly this delimiter on its own line: ---POST_SEPARATOR---\n\nReturn ONLY the 5 posts separated by the delimiter. No numbering, no labels, no JSON - just raw post text ready to copy-paste, separated by the delimiter.";
+      "\n\nYou must generate exactly 5 distinct post variations based on the research provided. Each variation should take a different angle:\n1. A strong hook / attention-grabber opening\n2. A data-led / statistics-focused approach\n3. A storytelling / personal narrative angle\n4. A contrarian / challenging conventional wisdom take\n5. A call-to-action / community engagement approach\n\n" +
+      `IMPORTANT: Write ALL posts entirely in ${langName}. Do not use any other language.\n\n` +
+      "Separate each post with exactly this delimiter on its own line: ---POST_SEPARATOR---\n\nReturn ONLY the 5 posts separated by the delimiter. No numbering, no labels, no JSON - just raw post text ready to copy-paste, separated by the delimiter.";
 
     const researchContext = topic.findings?.summary
       ? "Research Findings:\n" + topic.findings.summary
@@ -88,7 +97,8 @@ Deno.serve(async (req: Request) => {
       tone +
       '" tone that will resonate with professionals in ' +
       topic.industry +
-      ".";
+      ".\n\nRemember: all posts must be written in " +
+      langName + ".";
 
     const response = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",

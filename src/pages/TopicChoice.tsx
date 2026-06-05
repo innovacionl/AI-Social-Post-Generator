@@ -19,7 +19,7 @@ function loadSession<T>(key: string, fallback: T): T {
 }
 
 export default function TopicChoice() {
-  const { t } = useI18n();
+  const { t, language } = useI18n();
   const [career, setCareer] = useState(() => loadSession(STORAGE_KEY_CAREER, ''));
   const [industry, setIndustry] = useState(() => loadSession(STORAGE_KEY_INDUSTRY, ''));
   const [topic, setTopic] = useState(() => loadSession(STORAGE_KEY_TOPIC, ''));
@@ -75,6 +75,7 @@ export default function TopicChoice() {
           career: career.trim(),
           industry: industry.trim(),
           topic: topic.trim() || undefined,
+          language,
         }),
       });
 

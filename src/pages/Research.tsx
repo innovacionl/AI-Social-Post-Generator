@@ -25,7 +25,7 @@ const POLL_INTERVAL = 12000;
 
 export default function Research() {
   const navigate = useNavigate();
-  const { t } = useI18n();
+  const { t, language } = useI18n();
   const [topics, setTopics] = useState<ResearchTopic[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedTopic, setSelectedTopic] = useState<ResearchTopic | null>(null);
@@ -165,7 +165,7 @@ export default function Research() {
           'Authorization': `Bearer ${supabaseAnonKey}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ topicId: id, action: 'start' }),
+        body: JSON.stringify({ topicId: id, action: 'start', language }),
       });
 
       if (!response.ok) {

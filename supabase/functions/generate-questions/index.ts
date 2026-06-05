@@ -6,13 +6,18 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
+const languageNames: Record<string, string> = {
+  nl: "Dutch (Nederlands)",
+  en: "English",
+};
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { status: 200, headers: corsHeaders });
   }
 
   try {
-    const { career, industry, topic } = await req.json();
+    const { career, industry, topic, language = "nl" } = await req.json();
 
     if (!career || !industry) {
       return new Response(
@@ -29,6 +34,7 @@ Deno.serve(async (req: Request) => {
       );
     }
 
+    const langName = languageNames[language] || "English";
     const topicContext = topic
       ? `They are specifically interested in exploring: "${topic}".`
       : "";
@@ -39,6 +45,8 @@ Deno.serve(async (req: Request) => {
 - Likely to yield insights that can be turned into compelling social media content
 - Thought-provoking and non-obvious
 
+IMPORTANT: Write ALL questions in ${langName}. Do not use any other language.
+
 Return ONLY a JSON array of exactly 5 strings, each being a research question. No other text or formatting.`;
 
     const userPrompt = `Generate 5 research questions for a professional with the following context:
@@ -46,7 +54,9 @@ Return ONLY a JSON array of exactly 5 strings, each being a research question. N
 - Industry: ${industry}
 ${topicContext}
 
-The questions should help them discover insights they can share as thought leadership content on social media.`;
+The questions should help them discover insights they can share as thought leadership content on social media.
+
+Remember: respond entirely in ${langName}.`;
 
     const response = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",

@@ -56,7 +56,7 @@ function loadSession<T>(key: string, fallback: T): T {
 
 export default function PostGenerator() {
   const location = useLocation();
-  const { t } = useI18n();
+  const { t, language } = useI18n();
 
   const [researchItem, setResearchItem] = useState<ResearchTopic | null>(() =>
     loadSession(STORAGE_KEY_RESEARCH, null)
@@ -138,6 +138,7 @@ export default function PostGenerator() {
           platform: selectedPlatform,
           tone: selectedTone,
           customStyle: customStyle.trim() || undefined,
+          language,
         }),
       });
 
