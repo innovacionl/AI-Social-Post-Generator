@@ -13,6 +13,39 @@ const languageNames: Record<string, string> = {
   en: "English",
 };
 
+const DEFAULT_SYSTEM = `You are an expert research analyst. Write a thorough, well-structured research report based on your knowledge up to your training cutoff.
+
+IMPORTANT: Write the entire report in {{languageName}}. All headings, analysis, conclusions, and any references must be in {{languageName}}.
+
+Structure the report with clear sections:
+1. Executive Summary
+2. Key Findings (with data points and statistics where possible)
+3. Current Trends & Developments
+4. Expert Perspectives
+5. Implications & Actionable Insights
+6. Conclusion
+
+Be specific, cite figures and examples, and write at a depth suitable for a thought leader creating social media content.`;
+
+const DEFAULT_USER = `Conduct thorough research on the following question:
+
+"{{question}}"
+
+Context:
+- Professional Role: {{career}}
+- Industry: {{industry}}
+
+Write a comprehensive research report (aim for 1500–2500 words) that gives this professional genuine insights they can use to create compelling social media thought-leadership content. Include specific data, trends, statistics, and expert perspectives.
+
+Respond entirely in {{languageName}}.`;
+
+function fill(template: string, vars: Record<string, string>): string {
+  return Object.entries(vars).reduce(
+    (t, [k, v]) => t.replaceAll(`{{${k}}}`, v),
+    template
+  );
+}
+
 function respond(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
@@ -40,13 +73,25 @@ Deno.serve(async (req: Request) => {
     if (fe || !topic) return respond({ error: "Topic not found" }, 404);
 
     if (action === "start") {
-      // Mark in-progress so the UI reflects it immediately
       await supabase.from("research_topics")
         .update({ status: "In Progress" })
         .eq("id", topicId);
 
-      // Call OpenRouter synchronously — waitUntil is unreliable in Supabase edge runtime
-      const { summary, error: researchError } = await runResearch(topic, apiKey, language);
+      // Load custom prompts
+      const { data: promptRows } = await supabase
+        .from("prompt_settings")
+        .select("key, value")
+        .in("key", ["research_system", "research_user"]);
+      const custom: Record<string, string> = {};
+      (promptRows ?? []).forEach(({ key, value }: { key: string; value: string }) => {
+        custom[key] = value;
+      });
+
+      const { summary, error: researchError } = await runResearch(
+        topic, apiKey, language,
+        custom.research_system ?? DEFAULT_SYSTEM,
+        custom.research_user ?? DEFAULT_USER,
+      );
 
       if (researchError || !summary) {
         await supabase.from("research_topics")
@@ -67,7 +112,6 @@ Deno.serve(async (req: Request) => {
     }
 
     if (action === "poll") {
-      // Re-fetch latest DB state — handles the case where the user reloaded mid-research
       const { data: latest } = await supabase
         .from("research_topics").select("*").eq("id", topicId).maybeSingle();
 
@@ -79,7 +123,6 @@ Deno.serve(async (req: Request) => {
       if (latest.status === "Pending") {
         return respond({ status: "failed", error: "Research did not complete" });
       }
-      // Still "In Progress" (synchronous call still running)
       return respond({ status: "polling", researchStatus: "in_progress" });
     }
 
@@ -96,42 +139,24 @@ Deno.serve(async (req: Request) => {
 async function runResearch(
   topic: any,
   apiKey: string,
-  language: string
+  language: string,
+  systemTemplate: string,
+  userTemplate: string,
 ): Promise<{ summary?: string; error?: string }> {
   const langName = languageNames[language] || "English";
 
-  const systemPrompt = `You are an expert research analyst. Write a thorough, well-structured research report based on your knowledge up to your training cutoff.
-
-IMPORTANT: Write the entire report in ${langName}. All headings, analysis, conclusions, and any references must be in ${langName}.
-
-Structure the report with clear sections:
-1. Executive Summary
-2. Key Findings (with data points and statistics where possible)
-3. Current Trends & Developments
-4. Expert Perspectives
-5. Implications & Actionable Insights
-6. Conclusion
-
-Be specific, cite figures and examples, and write at a depth suitable for a thought leader creating social media content.`;
-
-  const userPrompt = `Conduct thorough research on the following question:
-
-"${topic.question}"
-
-Context:
-- Professional Role: ${topic.career}
-- Industry: ${topic.industry}
-
-Write a comprehensive research report (aim for 1500–2500 words) that gives this professional genuine insights they can use to create compelling social media thought-leadership content. Include specific data, trends, statistics, and expert perspectives.
-
-Respond entirely in ${langName}.`;
+  const systemPrompt = fill(systemTemplate, { languageName: langName });
+  const userPrompt = fill(userTemplate, {
+    question: topic.question,
+    career: topic.career,
+    industry: topic.industry,
+    languageName: langName,
+  });
 
   try {
-    // 120-second abort to stay well within the Supabase 150s edge function timeout
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 120_000);
 
-    // Model: openai/gpt-4o-mini — confirmed working, good quality for long-form research synthesis
     const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
       signal: controller.signal,

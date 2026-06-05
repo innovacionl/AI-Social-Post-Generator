@@ -10,50 +10,7 @@ export interface Translations {
     postGenerator: string;
     drafts: string;
     pastPosts: string;
-    setupGuide: string;
-  };
-  // SetupModal
-  setupModal: {
-    title: string;
-    subtitle: string;
-    stepFork: string;
-    stepImport: string;
-    stepApiKeys: string;
-    next: string;
-    nextImport: string;
-    nextApiKeys: string;
-    back: string;
-    done: string;
-    fork: {
-      intro: string;
-      step1: string;
-      step2before: string;
-      step2fork: string;
-      step2after: string;
-      step3: string;
-    };
-    import: {
-      intro: string;
-      step1before: string;
-      step1link: string;
-      step1after: string;
-      step2before: string;
-      step2github: string;
-      step2after: string;
-      step3: string;
-      note: string;
-    };
-    keys: {
-      intro: string;
-      step1before: string;
-      step1settings: string;
-      step1after: string;
-      step2: string;
-      copyName: string;
-      copied: string;
-      importantTitle: string;
-      importantBody: string;
-    };
+    settings: string;
   };
   // TopicChoice
   topicChoice: {
@@ -198,49 +155,7 @@ const en: Translations = {
     postGenerator: 'Post Generator',
     drafts: 'Drafts',
     pastPosts: 'Past Posts',
-    setupGuide: 'Setup Guide',
-  },
-  setupModal: {
-    title: 'Project Setup Guide',
-    subtitle: 'Get your own copy running in minutes',
-    stepFork: 'Fork',
-    stepImport: 'Import',
-    stepApiKeys: 'Add API Keys',
-    next: 'Next',
-    nextImport: 'Next: Import',
-    nextApiKeys: 'Next: API Keys',
-    back: 'Back',
-    done: 'Done',
-    fork: {
-      intro: 'Fork the repository to your own GitHub account:',
-      step1: 'Visit the repository link below.',
-      step2before: 'Click the ',
-      step2fork: '"Fork"',
-      step2after: ' button in the top-right area of the page (shown below).',
-      step3: 'Confirm the fork. This creates a copy of the repository under your GitHub account.',
-    },
-    import: {
-      intro: 'Import your forked repository into Bolt:',
-      step1before: 'Go to ',
-      step1link: 'bolt.new',
-      step1after: ' and look at the bottom of the prompt area.',
-      step2before: 'Click the ',
-      step2github: '"GitHub"',
-      step2after: ' button (shown below).',
-      step3: 'Select your forked repository from the list. Bolt will create a new project with all the files ready to go.',
-      note: 'After importing, your new project will open with all files, database tables, and edge functions already set up. You just need to add your own API keys (Step 3).',
-    },
-    keys: {
-      intro: 'Add your API keys as secrets:',
-      step1before: 'In your new project, open ',
-      step1settings: 'Settings',
-      step1after: ' and navigate to the Secrets section.',
-      step2: 'Add the following as secrets with your own keys.',
-      copyName: 'Copy name',
-      copied: 'Copied',
-      importantTitle: 'Important',
-      importantBody: 'After adding your secrets, the edge functions will automatically pick them up. You may need to redeploy the functions or restart the project for changes to take effect.',
-    },
+    settings: 'Settings',
   },
   topicChoice: {
     title: 'Topic Choice',
@@ -391,49 +306,7 @@ const nl: Translations = {
     postGenerator: 'Berichtgenerator',
     drafts: 'Concepten',
     pastPosts: 'Gepubliceerde Berichten',
-    setupGuide: 'Installatiegids',
-  },
-  setupModal: {
-    title: 'Projectinstallatiegids',
-    subtitle: 'Krijg je eigen kopie in enkele minuten werkend',
-    stepFork: 'Forken',
-    stepImport: 'Importeren',
-    stepApiKeys: 'API-sleutels toevoegen',
-    next: 'Volgende',
-    nextImport: 'Volgende: Importeren',
-    nextApiKeys: 'Volgende: API-sleutels',
-    back: 'Terug',
-    done: 'Klaar',
-    fork: {
-      intro: 'Fork de repository naar je eigen GitHub-account:',
-      step1: 'Bezoek de onderstaande repository-link.',
-      step2before: 'Klik op de ',
-      step2fork: '"Fork"',
-      step2after: '-knop rechtsboven op de pagina (zie hieronder).',
-      step3: 'Bevestig de fork. Dit maakt een kopie van de repository onder je GitHub-account.',
-    },
-    import: {
-      intro: 'Importeer je geforkte repository in Bolt:',
-      step1before: 'Ga naar ',
-      step1link: 'bolt.new',
-      step1after: ' en kijk onderaan het promptgebied.',
-      step2before: 'Klik op de ',
-      step2github: '"GitHub"',
-      step2after: '-knop (zie hieronder).',
-      step3: 'Selecteer je geforkte repository uit de lijst. Bolt maakt een nieuw project aan met alle bestanden klaar.',
-      note: 'Na het importeren wordt je nieuwe project geopend met alle bestanden, databasetabellen en edge-functies al ingesteld. Je hoeft alleen je eigen API-sleutels toe te voegen (stap 3).',
-    },
-    keys: {
-      intro: 'Voeg je API-sleutels toe als geheimen:',
-      step1before: 'Open in je nieuwe project ',
-      step1settings: 'Instellingen',
-      step1after: ' en navigeer naar de sectie Geheimen.',
-      step2: 'Voeg het volgende toe als geheimen met je eigen sleutels.',
-      copyName: 'Naam kopiëren',
-      copied: 'Gekopieerd',
-      importantTitle: 'Belangrijk',
-      importantBody: 'Nadat je je geheimen hebt toegevoegd, worden ze automatisch opgepikt door de edge-functies. Mogelijk moet je de functies opnieuw implementeren of het project opnieuw starten.',
-    },
+    settings: 'Instellingen',
   },
   topicChoice: {
     title: 'Onderwerpkeuze',

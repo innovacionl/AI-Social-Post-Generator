@@ -5,20 +5,16 @@ import {
   PenTool,
   FileText,
   Archive,
-  HelpCircle,
+  Settings,
 } from 'lucide-react';
 import { useI18n, Language } from '../lib/i18n';
-
-interface SidebarProps {
-  onOpenSetup: () => void;
-}
 
 const languages: { code: Language; flag: string; label: string }[] = [
   { code: 'nl', flag: '🇳🇱', label: 'Nederlands' },
   { code: 'en', flag: '🇬🇧', label: 'English' },
 ];
 
-export default function Sidebar({ onOpenSetup }: SidebarProps) {
+export default function Sidebar() {
   const { t, language, setLanguage } = useI18n();
 
   const navItems = [
@@ -27,13 +23,14 @@ export default function Sidebar({ onOpenSetup }: SidebarProps) {
     { to: '/posts', label: t.sidebar.postGenerator, icon: PenTool },
     { to: '/drafts', label: t.sidebar.drafts, icon: FileText },
     { to: '/past-posts', label: t.sidebar.pastPosts, icon: Archive },
+    { to: '/settings', label: t.sidebar.settings, icon: Settings },
   ];
 
   return (
     <aside className="fixed left-0 top-0 h-full w-64 bg-slate-900 text-white flex flex-col z-50">
       <div className="px-6 py-6 border-b border-slate-700 flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <h1 className="text-lg font-semibold tracking-tight">PostCraft</h1>
+          <h1 className="text-lg font-semibold tracking-tight">Socials Generator</h1>
           <p className="text-xs text-slate-400 mt-0.5">AI Content Studio</p>
         </div>
 
@@ -74,16 +71,6 @@ export default function Sidebar({ onOpenSetup }: SidebarProps) {
           </NavLink>
         ))}
       </nav>
-
-      <div className="px-3 pb-4">
-        <button
-          onClick={onOpenSetup}
-          className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors"
-        >
-          <HelpCircle size={16} />
-          {t.sidebar.setupGuide}
-        </button>
-      </div>
     </aside>
   );
 }

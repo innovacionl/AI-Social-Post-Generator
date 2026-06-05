@@ -1,4 +1,5 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { createClient } from "npm:@supabase/supabase-js@2.57.4";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -10,6 +11,31 @@ const languageNames: Record<string, string> = {
   nl: "Dutch (Nederlands)",
   en: "English",
 };
+
+const DEFAULT_SYSTEM = `You are a research strategist who helps professionals identify high-value research questions relevant to their career and industry. Generate questions that are:
+- Timely and relevant to current trends (2024-2025)
+- Specific enough to research effectively
+- Likely to yield insights that can be turned into compelling social media content
+- Thought-provoking and non-obvious
+
+IMPORTANT: Write ALL questions in {{languageName}}. Do not use any other language.
+
+Return ONLY a JSON array of exactly 5 strings, each being a research question. No other text or formatting.`;
+
+const DEFAULT_USER = `Generate 5 research questions for a professional with the following context:
+- Career/Role: {{career}}
+- Industry: {{industry}}
+{{topicContext}}
+The questions should help them discover insights they can share as thought leadership content on social media.
+
+Remember: respond entirely in {{languageName}}.`;
+
+function fill(template: string, vars: Record<string, string>): string {
+  return Object.entries(vars).reduce(
+    (t, [k, v]) => t.replaceAll(`{{${k}}}`, v),
+    template
+  );
+}
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
@@ -34,31 +60,34 @@ Deno.serve(async (req: Request) => {
       );
     }
 
+    // Load custom prompts from DB (fall back to defaults if not set)
+    const supabase = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+    );
+    const { data: promptRows } = await supabase
+      .from("prompt_settings")
+      .select("key, value")
+      .in("key", ["questions_system", "questions_user"]);
+
+    const custom: Record<string, string> = {};
+    (promptRows ?? []).forEach(({ key, value }: { key: string; value: string }) => {
+      custom[key] = value;
+    });
+
     const langName = languageNames[language] || "English";
     const topicContext = topic
       ? `They are specifically interested in exploring: "${topic}".`
       : "";
 
-    const systemPrompt = `You are a research strategist who helps professionals identify high-value research questions relevant to their career and industry. Generate questions that are:
-- Timely and relevant to current trends (2024-2025)
-- Specific enough to research effectively
-- Likely to yield insights that can be turned into compelling social media content
-- Thought-provoking and non-obvious
+    const systemPrompt = fill(custom.questions_system ?? DEFAULT_SYSTEM, { languageName: langName });
+    const userPrompt = fill(custom.questions_user ?? DEFAULT_USER, {
+      career,
+      industry,
+      topicContext,
+      languageName: langName,
+    });
 
-IMPORTANT: Write ALL questions in ${langName}. Do not use any other language.
-
-Return ONLY a JSON array of exactly 5 strings, each being a research question. No other text or formatting.`;
-
-    const userPrompt = `Generate 5 research questions for a professional with the following context:
-- Career/Role: ${career}
-- Industry: ${industry}
-${topicContext}
-
-The questions should help them discover insights they can share as thought leadership content on social media.
-
-Remember: respond entirely in ${langName}.`;
-
-    // Model: meta-llama/llama-3.1-8b-instruct — confirmed working, cheapest option for simple structured JSON output
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -86,12 +115,10 @@ Remember: respond entirely in ${langName}.`;
     const data = await response.json();
     const content = data.choices?.[0]?.message?.content || "[]";
 
-    // Strip <think>...</think> tags that some reasoning models include
     const cleaned = content.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
 
     let questions: string[];
     try {
-      // Extract JSON array even if wrapped in markdown code fences
       const jsonMatch = cleaned.match(/\[[\s\S]*\]/);
       questions = jsonMatch ? JSON.parse(jsonMatch[0]) : JSON.parse(cleaned);
     } catch {

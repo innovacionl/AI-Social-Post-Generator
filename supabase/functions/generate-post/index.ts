@@ -13,6 +13,43 @@ const languageNames: Record<string, string> = {
   en: "English",
 };
 
+const DEFAULT_SYSTEM = `You are an expert social media content creator. You craft viral, engaging posts from research insights.
+
+The user's chosen tone/style: {{tone}}
+{{customStyleSection}}
+Platform rules:
+{{platformGuide}}
+
+You must generate exactly 5 distinct post variations based on the research provided. Each variation should take a different angle:
+1. A strong hook / attention-grabber opening
+2. A data-led / statistics-focused approach
+3. A storytelling / personal narrative angle
+4. A contrarian / challenging conventional wisdom take
+5. A call-to-action / community engagement approach
+
+IMPORTANT: Write ALL posts entirely in {{languageName}}. Do not use any other language.
+
+Separate each post with exactly this delimiter on its own line: ---POST_SEPARATOR---
+
+Return ONLY the 5 posts separated by the delimiter. No numbering, no labels, no JSON - just raw post text ready to copy-paste.`;
+
+const DEFAULT_USER = `Create 5 {{platformLabel}} post variations based on this research:
+
+Question: {{question}}
+Career: {{career}}
+Industry: {{industry}}
+{{researchContext}}
+Write 5 compelling posts in a "{{tone}}" tone that will resonate with professionals in {{industry}}.
+
+Remember: all posts must be written in {{languageName}}.`;
+
+function fill(template: string, vars: Record<string, string>): string {
+  return Object.entries(vars).reduce(
+    (t, [k, v]) => t.replaceAll(`{{${k}}}`, v),
+    template
+  );
+}
+
 function respond(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
@@ -54,43 +91,44 @@ Deno.serve(async (req: Request) => {
 
     const langName = languageNames[language] || "English";
 
+    // Load custom prompts from DB
+    const { data: promptRows } = await supabase
+      .from("prompt_settings")
+      .select("key, value")
+      .in("key", ["post_system", "post_user"]);
+    const custom: Record<string, string> = {};
+    (promptRows ?? []).forEach(({ key, value }: { key: string; value: string }) => {
+      custom[key] = value;
+    });
+
     const platformGuide =
       platform === "twitter"
         ? "X (Twitter) posts: Maximum 280 characters each. Concise, punchy, attention-grabbing. Use line breaks for readability. Hashtags are optional."
         : "LinkedIn posts: 800-1500 characters each. Short paragraphs and line breaks. Open with a hook. End with a call-to-action or thought-provoking question. Hashtags at the end are encouraged.";
-
+    const platformLabel = platform === "twitter" ? "X (Twitter)" : "LinkedIn";
     const customStyleSection = customStyle
       ? "\n\nAdditional style instructions from the user:\n" + customStyle
       : "";
-
-    const systemPrompt =
-      "You are an expert social media content creator. You craft viral, engaging posts from research insights.\n\n" +
-      "The user's chosen tone/style: " + tone +
-      customStyleSection +
-      "\n\nPlatform rules:\n" + platformGuide +
-      "\n\nYou must generate exactly 5 distinct post variations based on the research provided. Each variation should take a different angle:\n" +
-      "1. A strong hook / attention-grabber opening\n" +
-      "2. A data-led / statistics-focused approach\n" +
-      "3. A storytelling / personal narrative angle\n" +
-      "4. A contrarian / challenging conventional wisdom take\n" +
-      "5. A call-to-action / community engagement approach\n\n" +
-      `IMPORTANT: Write ALL posts entirely in ${langName}. Do not use any other language.\n\n` +
-      "Separate each post with exactly this delimiter on its own line: ---POST_SEPARATOR---\n\n" +
-      "Return ONLY the 5 posts separated by the delimiter. No numbering, no labels, no JSON - just raw post text ready to copy-paste.";
-
     const researchContext = topic.findings?.summary
-      ? "Research Findings:\n" + topic.findings.summary
-      : "No detailed research available - use the question itself as the basis for the posts.";
+      ? "\nResearch Findings:\n" + topic.findings.summary
+      : "\nNo detailed research available - use the question itself as the basis for the posts.";
 
-    const platformLabel = platform === "twitter" ? "X (Twitter)" : "LinkedIn";
-    const userPrompt =
-      "Create 5 " + platformLabel + " post variations based on this research:\n\n" +
-      "Question: " + topic.question + "\n" +
-      "Career: " + topic.career + "\n" +
-      "Industry: " + topic.industry + "\n\n" +
-      researchContext +
-      '\n\nWrite 5 compelling posts in a "' + tone + '" tone that will resonate with professionals in ' +
-      topic.industry + ".\n\nRemember: all posts must be written in " + langName + ".";
+    const systemPrompt = fill(custom.post_system ?? DEFAULT_SYSTEM, {
+      tone,
+      customStyleSection,
+      platformGuide,
+      languageName: langName,
+    });
+
+    const userPrompt = fill(custom.post_user ?? DEFAULT_USER, {
+      platformLabel,
+      question: topic.question,
+      career: topic.career,
+      industry: topic.industry,
+      researchContext,
+      tone,
+      languageName: langName,
+    });
 
     // Model: openai/gpt-4o-mini — confirmed working, reliable creative writing quality
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
