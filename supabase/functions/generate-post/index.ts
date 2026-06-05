@@ -92,7 +92,7 @@ Deno.serve(async (req: Request) => {
       '\n\nWrite 5 compelling posts in a "' + tone + '" tone that will resonate with professionals in ' +
       topic.industry + ".\n\nRemember: all posts must be written in " + langName + ".";
 
-    // Model: google/gemini-2.5-flash-lite — good creative writing quality at low cost
+    // Model: google/gemini-2.0-flash-001 — confirmed valid, $0.10/$0.40 per M tokens; good creative writing quality at low cost
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -100,7 +100,7 @@ Deno.serve(async (req: Request) => {
         "Authorization": `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash-lite",
+        model: "google/gemini-2.0-flash-001",
         max_tokens: 4096,
         messages: [
           { role: "system", content: systemPrompt },

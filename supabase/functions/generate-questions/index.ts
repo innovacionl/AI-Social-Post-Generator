@@ -58,7 +58,7 @@ The questions should help them discover insights they can share as thought leade
 
 Remember: respond entirely in ${langName}.`;
 
-    // Model: qwen/qwen3-9b — cheapest reliable option for simple structured JSON output
+    // Model: google/gemini-2.0-flash-001 — confirmed valid, $0.10/$0.40 per M tokens; cheapest reliable option for structured JSON
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -66,7 +66,7 @@ Remember: respond entirely in ${langName}.`;
         "Authorization": `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: "qwen/qwen3-9b",
+        model: "google/gemini-2.0-flash-001",
         max_tokens: 1024,
         messages: [
           { role: "system", content: systemPrompt },

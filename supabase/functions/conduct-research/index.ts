@@ -111,7 +111,7 @@ Write a comprehensive research report (aim for 1500–2500 words) that gives thi
 Respond entirely in ${langName}.`;
 
   try {
-    // Model: google/gemini-2.5-flash-lite — best quality/cost for long-form research
+    // Model: google/gemini-2.0-flash-001 — confirmed valid, $0.10/$0.40 per M tokens; good quality for long-form research
     const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -119,7 +119,7 @@ Respond entirely in ${langName}.`;
         "Authorization": `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash-lite",
+        model: "google/gemini-2.0-flash-001",
         max_tokens: 4096,
         messages: [
           { role: "system", content: systemPrompt },
