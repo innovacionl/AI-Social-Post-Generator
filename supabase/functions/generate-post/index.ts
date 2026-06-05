@@ -29,10 +29,7 @@ Deno.serve(async (req: Request) => {
     const { topicId, platform, tone, customStyle, language = "nl" } = await req.json();
 
     if (!topicId || !platform || !tone) {
-      return respond(
-        { error: "topicId, platform, and tone are required" },
-        400
-      );
+      return respond({ error: "topicId, platform, and tone are required" }, 400);
     }
 
     const supabase = createClient(
@@ -50,9 +47,9 @@ Deno.serve(async (req: Request) => {
       return respond({ error: "Research topic not found" }, 404);
     }
 
-    const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
+    const apiKey = Deno.env.get("OPENROUTER_API_KEY");
     if (!apiKey) {
-      return respond({ error: "Anthropic API key not configured" }, 500);
+      return respond({ error: "OpenRouter API key not configured" }, 500);
     }
 
     const langName = languageNames[language] || "English";
@@ -67,67 +64,58 @@ Deno.serve(async (req: Request) => {
       : "";
 
     const systemPrompt =
-      "You are an expert social media content creator. You craft viral, engaging posts from research insights.\n\nThe user's chosen tone/style: " +
-      tone +
+      "You are an expert social media content creator. You craft viral, engaging posts from research insights.\n\n" +
+      "The user's chosen tone/style: " + tone +
       customStyleSection +
-      "\n\nPlatform rules:\n" +
-      platformGuide +
-      "\n\nYou must generate exactly 5 distinct post variations based on the research provided. Each variation should take a different angle:\n1. A strong hook / attention-grabber opening\n2. A data-led / statistics-focused approach\n3. A storytelling / personal narrative angle\n4. A contrarian / challenging conventional wisdom take\n5. A call-to-action / community engagement approach\n\n" +
+      "\n\nPlatform rules:\n" + platformGuide +
+      "\n\nYou must generate exactly 5 distinct post variations based on the research provided. Each variation should take a different angle:\n" +
+      "1. A strong hook / attention-grabber opening\n" +
+      "2. A data-led / statistics-focused approach\n" +
+      "3. A storytelling / personal narrative angle\n" +
+      "4. A contrarian / challenging conventional wisdom take\n" +
+      "5. A call-to-action / community engagement approach\n\n" +
       `IMPORTANT: Write ALL posts entirely in ${langName}. Do not use any other language.\n\n` +
-      "Separate each post with exactly this delimiter on its own line: ---POST_SEPARATOR---\n\nReturn ONLY the 5 posts separated by the delimiter. No numbering, no labels, no JSON - just raw post text ready to copy-paste, separated by the delimiter.";
+      "Separate each post with exactly this delimiter on its own line: ---POST_SEPARATOR---\n\n" +
+      "Return ONLY the 5 posts separated by the delimiter. No numbering, no labels, no JSON - just raw post text ready to copy-paste.";
 
     const researchContext = topic.findings?.summary
       ? "Research Findings:\n" + topic.findings.summary
       : "No detailed research available - use the question itself as the basis for the posts.";
 
-    const platformLabel =
-      platform === "twitter" ? "X (Twitter)" : "LinkedIn";
+    const platformLabel = platform === "twitter" ? "X (Twitter)" : "LinkedIn";
     const userPrompt =
-      "Create 5 " +
-      platformLabel +
-      " post variations based on this research:\n\nQuestion: " +
-      topic.question +
-      "\nCareer: " +
-      topic.career +
-      "\nIndustry: " +
-      topic.industry +
-      "\n\n" +
+      "Create 5 " + platformLabel + " post variations based on this research:\n\n" +
+      "Question: " + topic.question + "\n" +
+      "Career: " + topic.career + "\n" +
+      "Industry: " + topic.industry + "\n\n" +
       researchContext +
-      '\n\nWrite 5 compelling posts in a "' +
-      tone +
-      '" tone that will resonate with professionals in ' +
-      topic.industry +
-      ".\n\nRemember: all posts must be written in " +
-      langName + ".";
+      '\n\nWrite 5 compelling posts in a "' + tone + '" tone that will resonate with professionals in ' +
+      topic.industry + ".\n\nRemember: all posts must be written in " + langName + ".";
 
-    const response = await fetch("https://api.anthropic.com/v1/messages", {
+    // Model: google/gemini-2.5-flash-lite — good creative writing quality at low cost
+    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
+        "Authorization": `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: "claude-opus-4-20250514",
+        model: "google/gemini-2.5-flash-lite",
         max_tokens: 4096,
-        system: systemPrompt,
-        messages: [{ role: "user", content: userPrompt }],
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt },
+        ],
       }),
     });
 
     if (!response.ok) {
       const errorText = await response.text();
-      return respond(
-        {
-          error: "Anthropic API error: " + response.status,
-          details: errorText,
-        },
-        502
-      );
+      return respond({ error: "OpenRouter API error: " + response.status, details: errorText }, 502);
     }
 
     const data = await response.json();
-    const fullText = data.content?.[0]?.text || "";
+    const fullText = data.choices?.[0]?.message?.content || "";
 
     const posts = fullText
       .split("---POST_SEPARATOR---")
@@ -148,9 +136,6 @@ Deno.serve(async (req: Request) => {
 
     return respond({ variations });
   } catch (error) {
-    return respond(
-      { error: "Internal server error", details: String(error) },
-      500
-    );
+    return respond({ error: "Internal server error", details: String(error) }, 500);
   }
 });

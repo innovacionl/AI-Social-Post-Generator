@@ -26,10 +26,10 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
+    const apiKey = Deno.env.get("OPENROUTER_API_KEY");
     if (!apiKey) {
       return new Response(
-        JSON.stringify({ error: "Anthropic API key not configured" }),
+        JSON.stringify({ error: "OpenRouter API key not configured" }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -58,37 +58,44 @@ The questions should help them discover insights they can share as thought leade
 
 Remember: respond entirely in ${langName}.`;
 
-    const response = await fetch("https://api.anthropic.com/v1/messages", {
+    // Model: qwen/qwen3-9b — cheapest reliable option for simple structured JSON output
+    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
+        "Authorization": `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: "claude-sonnet-4-20250514",
+        model: "qwen/qwen3-9b",
         max_tokens: 1024,
-        system: systemPrompt,
-        messages: [{ role: "user", content: userPrompt }],
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt },
+        ],
       }),
     });
 
     if (!response.ok) {
       const errorText = await response.text();
       return new Response(
-        JSON.stringify({ error: `Anthropic API error: ${response.status}`, details: errorText }),
+        JSON.stringify({ error: `OpenRouter API error: ${response.status}`, details: errorText }),
         { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
     const data = await response.json();
-    const content = data.content?.[0]?.text || "[]";
+    const content = data.choices?.[0]?.message?.content || "[]";
+
+    // Strip <think>...</think> tags that some reasoning models include
+    const cleaned = content.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
 
     let questions: string[];
     try {
-      questions = JSON.parse(content);
+      // Extract JSON array even if wrapped in markdown code fences
+      const jsonMatch = cleaned.match(/\[[\s\S]*\]/);
+      questions = jsonMatch ? JSON.parse(jsonMatch[0]) : JSON.parse(cleaned);
     } catch {
-      const matches = content.match(/"([^"]+\?)"/g);
+      const matches = cleaned.match(/"([^"]+\?)"/g);
       questions = matches
         ? matches.map((m: string) => m.replace(/^"|"$/g, "")).slice(0, 5)
         : [];

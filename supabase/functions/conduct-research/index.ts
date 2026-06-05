@@ -8,8 +8,6 @@ const corsHeaders = {
     "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
-const GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta/interactions";
-
 const languageNames: Record<string, string> = {
   nl: "Dutch (Nederlands)",
   en: "English",
@@ -20,14 +18,6 @@ function respond(body: unknown, status = 200) {
     status,
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
-}
-
-// Normalize various Gemini status strings to lowercase canonical values
-function normalizeStatus(raw: unknown): string {
-  const s = (String(raw || "")).toLowerCase().trim();
-  if (s === "succeeded" || s === "completed" || s === "complete") return "completed";
-  if (s === "failed" || s === "error" || s === "cancelled" || s === "canceled") return "failed";
-  return s || "unknown";
 }
 
 Deno.serve(async (req: Request) => {
@@ -42,201 +32,130 @@ Deno.serve(async (req: Request) => {
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
-    const geminiKey = Deno.env.get("GEMINI_API_KEY");
-    if (!geminiKey) return respond({ error: "Gemini API key not configured" }, 500);
+    const apiKey = Deno.env.get("OPENROUTER_API_KEY");
+    if (!apiKey) return respond({ error: "OpenRouter API key not configured" }, 500);
 
     const { data: topic, error: fe } = await supabase
       .from("research_topics").select("*").eq("id", topicId).maybeSingle();
     if (fe || !topic) return respond({ error: "Topic not found" }, 404);
 
-    if (action === "start") return await doStart(supabase, topic, geminiKey, language);
-    if (action === "poll") return await doPoll(supabase, topic, geminiKey);
-    if (action === "status") return await doRawStatus(topic, geminiKey);
+    if (action === "start") {
+      // Mark in-progress immediately so frontend can start polling
+      await supabase.from("research_topics")
+        .update({ status: "In Progress", gemini_interaction_id: null })
+        .eq("id", topicId);
+
+      // Run the OpenRouter call in the background so this response returns fast
+      EdgeRuntime.waitUntil(runResearch(supabase, topic, apiKey, language));
+
+      return respond({ status: "started" });
+    }
+
+    if (action === "poll") {
+      // Re-fetch latest DB state — no external API call needed
+      const { data: latest } = await supabase
+        .from("research_topics").select("*").eq("id", topicId).maybeSingle();
+
+      if (!latest) return respond({ status: "failed", error: "Topic not found" });
+
+      if (latest.status === "Complete") {
+        return respond({ status: "completed", topic: latest });
+      }
+      if (latest.status === "Pending") {
+        // Was reset or research failed
+        return respond({ status: "failed", error: "Research did not complete" });
+      }
+      // Still "In Progress"
+      return respond({ status: "polling", researchStatus: "in_progress" });
+    }
+
+    if (action === "status") {
+      // Diagnostic: return full DB record
+      return respond({ topic });
+    }
+
     return respond({ error: "Invalid action" }, 400);
   } catch (e) {
     return respond({ error: "Internal server error", details: String(e) }, 500);
   }
 });
 
-async function doStart(sb: any, topic: any, key: string, language: string) {
+// Runs in the background via waitUntil — updates DB when done
+async function runResearch(sb: any, topic: any, apiKey: string, language: string) {
   const langName = languageNames[language] || "English";
 
-  const prompt = `Conduct thorough, in-depth research on the following question. Provide a comprehensive analysis with real data, statistics, expert perspectives, current trends, and actionable insights.
+  const systemPrompt = `You are an expert research analyst. Write a thorough, well-structured research report based on your knowledge up to your training cutoff.
 
-Question: ${topic.question}
+IMPORTANT: Write the entire report in ${langName}. All headings, analysis, conclusions, and any references must be in ${langName}.
+
+Structure the report with clear sections:
+1. Executive Summary
+2. Key Findings (with data points and statistics where possible)
+3. Current Trends & Developments
+4. Expert Perspectives
+5. Implications & Actionable Insights
+6. Conclusion
+
+Be specific, cite figures and examples, and write at a depth suitable for a thought leader creating social media content.`;
+
+  const userPrompt = `Conduct thorough research on the following question:
+
+"${topic.question}"
 
 Context:
 - Professional Role: ${topic.career}
 - Industry: ${topic.industry}
 
-IMPORTANT: Write the entire research report in ${langName}. All section headings, analysis, conclusions, and citations must be in ${langName}.
+Write a comprehensive research report (aim for 1500–2500 words) that gives this professional genuine insights they can use to create compelling social media thought-leadership content. Include specific data, trends, statistics, and expert perspectives.
 
-Format the output as a detailed research report with clear sections. Include specific data points, statistics, and cite your sources.`;
+Respond entirely in ${langName}.`;
 
-  const res = await fetch(`${GEMINI_BASE}?key=${key}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "Api-Revision": "2026-05-20" },
-    body: JSON.stringify({
-      input: prompt,
-      agent: "deep-research-preview-04-2026",
-      background: true,
-      agent_config: { type: "deep-research", thinking_summaries: "auto" },
-    }),
-  });
+  try {
+    // Model: google/gemini-2.5-flash-lite — best quality/cost for long-form research
+    const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: "google/gemini-2.5-flash-lite",
+        max_tokens: 4096,
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt },
+        ],
+      }),
+    });
 
-  if (!res.ok) {
-    const err = await res.text();
-    await sb.from("research_topics").update({ status: "Pending" }).eq("id", topic.id);
-    return respond({ error: `Gemini API error: ${res.status}`, details: err }, 502);
-  }
+    if (!res.ok) {
+      const err = await res.text();
+      console.error("OpenRouter error:", res.status, err);
+      await sb.from("research_topics")
+        .update({ status: "Pending", gemini_interaction_id: null })
+        .eq("id", topic.id);
+      return;
+    }
 
-  const data = await res.json();
-  const iid = data.id || data.name;
+    const data = await res.json();
+    const summary = data.choices?.[0]?.message?.content?.trim() || "";
 
-  await sb.from("research_topics").update({
-    status: "In Progress",
-    gemini_interaction_id: iid,
-  }).eq("id", topic.id);
-
-  return respond({ status: "started", interactionId: iid });
-}
-
-async function doPoll(sb: any, topic: any, key: string) {
-  const iid = topic.gemini_interaction_id;
-  if (!iid) return respond({ error: "No research in progress" }, 400);
-
-  const res = await fetch(`${GEMINI_BASE}/${iid}?key=${key}`, {
-    headers: { "Api-Revision": "2026-05-20" },
-  });
-
-  if (!res.ok) {
-    const errText = await res.text().catch(() => res.status.toString());
-    return respond({ status: "polling", researchStatus: "in_progress", geminiError: `${res.status}: ${errText}` });
-  }
-
-  const data = await res.json();
-  const rawStatus = data.status || data.state || "";
-  const normalized = normalizeStatus(rawStatus);
-
-  if (normalized === "completed") {
-    const summary = getOutputText(data);
-    const sources = getSources(data, summary);
+    if (!summary) {
+      await sb.from("research_topics")
+        .update({ status: "Pending", gemini_interaction_id: null })
+        .eq("id", topic.id);
+      return;
+    }
 
     await sb.from("research_topics").update({
       status: "Complete",
-      findings: { summary, sources },
+      findings: { summary, sources: [] },
       gemini_interaction_id: null,
     }).eq("id", topic.id);
-
-    const { data: updated } = await sb
-      .from("research_topics").select("*").eq("id", topic.id).maybeSingle();
-
-    return respond({ status: "completed", topic: updated });
+  } catch (err) {
+    console.error("Research background task failed:", err);
+    await sb.from("research_topics")
+      .update({ status: "Pending", gemini_interaction_id: null })
+      .eq("id", topic.id);
   }
-
-  if (normalized === "failed") {
-    await sb.from("research_topics").update({
-      status: "Pending", gemini_interaction_id: null,
-    }).eq("id", topic.id);
-    return respond({ status: "failed", error: data.error?.message || data.error || "Research failed" });
-  }
-
-  // Still running — extract latest thinking summary
-  let thought: string | null = null;
-  if (Array.isArray(data.steps)) {
-    for (const s of data.steps) {
-      if (s.type === "thought" && Array.isArray(s.summary)) {
-        for (const c of s.summary) {
-          if (c.type === "text" && c.text) thought = c.text;
-        }
-      }
-    }
-  }
-
-  return respond({
-    status: "polling",
-    researchStatus: rawStatus || "in_progress",
-    normalizedStatus: normalized,
-    thinkingSummary: thought,
-  });
-}
-
-// Returns raw Gemini response for diagnostics — no DB writes
-async function doRawStatus(topic: any, key: string) {
-  const iid = topic.gemini_interaction_id;
-  if (!iid) return respond({ error: "No gemini_interaction_id stored for this topic" }, 400);
-
-  const res = await fetch(`${GEMINI_BASE}/${iid}?key=${key}`, {
-    headers: { "Api-Revision": "2026-05-20" },
-  });
-
-  const text = await res.text();
-  let parsed: unknown = null;
-  try { parsed = JSON.parse(text); } catch { /* leave as null */ }
-
-  return respond({
-    httpStatus: res.status,
-    interactionId: iid,
-    raw: parsed ?? text,
-  });
-}
-
-function getOutputText(data: any): string {
-  if (typeof data.output_text === "string" && data.output_text) return data.output_text;
-  if (typeof data.outputText === "string" && data.outputText) return data.outputText;
-
-  const parts: string[] = [];
-  if (Array.isArray(data.steps)) {
-    for (const s of data.steps) {
-      if (s.type === "model_output" && Array.isArray(s.content)) {
-        for (const c of s.content) {
-          if (c.type === "text" && typeof c.text === "string") parts.push(c.text);
-        }
-      }
-    }
-  }
-  return parts.join("\n\n");
-}
-
-function getSources(data: any, text: string): { title: string; url: string }[] {
-  const out: { title: string; url: string }[] = [];
-  const seen = new Set<string>();
-
-  if (Array.isArray(data.steps)) {
-    for (const s of data.steps) {
-      if (s.type === "model_output" && Array.isArray(s.content)) {
-        for (const c of s.content) {
-          if (c.type === "text" && Array.isArray(c.annotations)) {
-            for (const a of c.annotations) {
-              if (a.type === "url_citation" && a.url && !seen.has(a.url)) {
-                seen.add(a.url);
-                out.push({ title: a.title || new URL(a.url).hostname, url: a.url });
-              }
-            }
-          }
-        }
-      }
-      const gm = s.groundingMetadata || s.grounding_metadata;
-      if (gm && typeof gm === "object") {
-        const chunks = gm.groundingChunks || gm.grounding_chunks;
-        if (Array.isArray(chunks)) {
-          for (const ch of chunks) {
-            if (ch.web?.uri && !seen.has(ch.web.uri)) {
-              seen.add(ch.web.uri);
-              out.push({ title: ch.web.title || new URL(ch.web.uri).hostname, url: ch.web.uri });
-            }
-          }
-        }
-      }
-    }
-  }
-
-  if (out.length === 0 && text) {
-    const re = /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g;
-    let m;
-    while ((m = re.exec(text)) !== null) {
-      if (!seen.has(m[2])) { seen.add(m[2]); out.push({ title: m[1], url: m[2] }); }
-    }
-  }
-  return out;
 }
