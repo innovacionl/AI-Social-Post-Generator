@@ -6,8 +6,10 @@ import {
   FileText,
   Archive,
   Settings,
+  LogOut,
 } from 'lucide-react';
 import { useI18n, Language } from '../lib/i18n';
+import { useAuth } from '../lib/auth';
 
 const languages: { code: Language; flag: string; label: string }[] = [
   { code: 'nl', flag: '🇳🇱', label: 'Nederlands' },
@@ -16,6 +18,7 @@ const languages: { code: Language; flag: string; label: string }[] = [
 
 export default function Sidebar() {
   const { t, language, setLanguage } = useI18n();
+  const { signOut, user } = useAuth();
 
   const navItems = [
     { to: '/topics', label: t.sidebar.topicChoice, icon: Lightbulb },
@@ -71,6 +74,20 @@ export default function Sidebar() {
           </NavLink>
         ))}
       </nav>
+
+      {/* User + logout */}
+      <div className="px-3 pb-4 border-t border-slate-700/60 pt-3">
+        {user?.email && (
+          <p className="px-3 pb-2 text-xs text-slate-500 truncate">{user.email}</p>
+        )}
+        <button
+          onClick={() => signOut()}
+          className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors"
+        >
+          <LogOut size={16} />
+          {language === 'nl' ? 'Uitloggen' : 'Sign out'}
+        </button>
+      </div>
     </aside>
   );
 }
