@@ -380,7 +380,7 @@ export default function Settings() {
       { key: section.systemKey, value: values[section.systemKey], updated_at: new Date().toISOString() },
       { key: section.userKey, value: values[section.userKey], updated_at: new Date().toISOString() },
     ];
-    const { error } = await supabase.from('prompt_settings').upsert(rows, { onConflict: 'key' });
+    const { error } = await supabase.from('prompt_settings').upsert(rows, { onConflict: 'user_id,key' });
     if (error) {
       setSaveError(error.message);
     } else {

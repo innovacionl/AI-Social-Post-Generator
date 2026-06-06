@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { Sparkles, Plus, Check, Loader2 } from 'lucide-react';
-import { supabase, supabaseConfigured, supabaseUrl, supabaseAnonKey } from '../lib/supabase';
+import { supabase, supabaseConfigured, supabaseUrl } from '../lib/supabase';
 import { useI18n } from '../lib/i18n';
+import { useAuth } from '../lib/auth';
 
 const STORAGE_KEY_CAREER = 'topics_career';
 const STORAGE_KEY_INDUSTRY = 'topics_industry';
@@ -20,6 +21,7 @@ function loadSession<T>(key: string, fallback: T): T {
 
 export default function TopicChoice() {
   const { t, language } = useI18n();
+  const { session } = useAuth();
   const [career, setCareer] = useState(() => loadSession(STORAGE_KEY_CAREER, ''));
   const [industry, setIndustry] = useState(() => loadSession(STORAGE_KEY_INDUSTRY, ''));
   const [topic, setTopic] = useState(() => loadSession(STORAGE_KEY_TOPIC, ''));
@@ -68,7 +70,7 @@ export default function TopicChoice() {
       const response = await fetch(apiUrl, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${supabaseAnonKey}`,
+          'Authorization': `Bearer ${session?.access_token}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({

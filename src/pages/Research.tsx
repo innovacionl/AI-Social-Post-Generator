@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Trash2, FlaskConical, X, ExternalLink, PenTool, Loader2, Clock, Brain, ArrowRight, RefreshCw, RotateCcw } from 'lucide-react';
-import { supabase, supabaseConfigured, supabaseUrl, supabaseAnonKey } from '../lib/supabase';
+import { supabase, supabaseConfigured, supabaseUrl } from '../lib/supabase';
 import { useI18n } from '../lib/i18n';
+import { useAuth } from '../lib/auth';
 
 interface ResearchTopic {
   id: string;
@@ -26,6 +27,7 @@ const POLL_INTERVAL = 12000;
 export default function Research() {
   const navigate = useNavigate();
   const { t, language } = useI18n();
+  const { session } = useAuth();
   const [topics, setTopics] = useState<ResearchTopic[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedTopic, setSelectedTopic] = useState<ResearchTopic | null>(null);
@@ -116,7 +118,7 @@ export default function Research() {
       const response = await fetch(apiUrl, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${supabaseAnonKey}`,
+          'Authorization': `Bearer ${session?.access_token}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ topicId: id, action: 'poll' }),
@@ -183,7 +185,7 @@ export default function Research() {
       const response = await fetch(apiUrl, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${supabaseAnonKey}`,
+          'Authorization': `Bearer ${session?.access_token}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ topicId: id, action: 'start', language }),

@@ -65,15 +65,18 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
+    const authHeader = req.headers.get("Authorization") ?? "";
     const { topicId, platform, tone, customStyle, language = "nl" } = await req.json();
 
     if (!topicId || !platform || !tone) {
       return respond({ error: "topicId, platform, and tone are required" }, 400);
     }
 
+    // User-scoped client — RLS ensures users only access their own data
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+      Deno.env.get("SUPABASE_ANON_KEY")!,
+      { global: { headers: { Authorization: authHeader } } }
     );
 
     const { data: topic, error: fetchError } = await supabase
@@ -93,7 +96,6 @@ Deno.serve(async (req: Request) => {
 
     const langName = languageNames[language] || "English";
 
-    // Load custom prompts from DB
     const { data: promptRows } = await supabase
       .from("prompt_settings")
       .select("key, value")
@@ -132,7 +134,6 @@ Deno.serve(async (req: Request) => {
       languageName: langName,
     });
 
-    // Model: openai/gpt-4o-mini — confirmed working, reliable creative writing quality
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
       headers: {

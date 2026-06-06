@@ -18,8 +18,9 @@ import {
   X,
   History,
 } from 'lucide-react';
-import { supabase, supabaseConfigured, supabaseUrl, supabaseAnonKey } from '../lib/supabase';
+import { supabase, supabaseConfigured, supabaseUrl } from '../lib/supabase';
 import { useI18n } from '../lib/i18n';
+import { useAuth } from '../lib/auth';
 
 interface ResearchTopic {
   id: string;
@@ -57,6 +58,7 @@ function loadSession<T>(key: string, fallback: T): T {
 export default function PostGenerator() {
   const location = useLocation();
   const { t, language } = useI18n();
+  const { session } = useAuth();
 
   const [researchItem, setResearchItem] = useState<ResearchTopic | null>(() =>
     loadSession(STORAGE_KEY_RESEARCH, null)
@@ -130,7 +132,7 @@ export default function PostGenerator() {
       const response = await fetch(apiUrl, {
         method: 'POST',
         headers: {
-          Authorization: `Bearer ${supabaseAnonKey}`,
+          Authorization: `Bearer ${session?.access_token}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({

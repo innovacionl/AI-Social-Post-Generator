@@ -39,34 +39,39 @@ function fill(template: string, vars: Record<string, string>): string {
   );
 }
 
+function respond(body: unknown, status = 200) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { status: 200, headers: corsHeaders });
   }
 
   try {
+    const authHeader = req.headers.get("Authorization") ?? "";
+
     const { career, industry, topic, language = "nl" } = await req.json();
 
     if (!career || !industry) {
-      return new Response(
-        JSON.stringify({ error: "Career and industry are required" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      return respond({ error: "Career and industry are required" }, 400);
     }
 
     const apiKey = Deno.env.get("OPENROUTER_API_KEY");
     if (!apiKey) {
-      return new Response(
-        JSON.stringify({ error: "OpenRouter API key not configured" }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      return respond({ error: "OpenRouter API key not configured" }, 500);
     }
 
-    // Load custom prompts from DB (fall back to defaults if not set)
+    // User-scoped client — reads only this user's prompt_settings via RLS
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+      Deno.env.get("SUPABASE_ANON_KEY")!,
+      { global: { headers: { Authorization: authHeader } } }
     );
+
     const { data: promptRows } = await supabase
       .from("prompt_settings")
       .select("key, value")
@@ -108,15 +113,11 @@ Deno.serve(async (req: Request) => {
 
     if (!response.ok) {
       const errorText = await response.text();
-      return new Response(
-        JSON.stringify({ error: `OpenRouter API error: ${response.status}`, details: errorText }),
-        { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      return respond({ error: `OpenRouter API error: ${response.status}`, details: errorText }, 502);
     }
 
     const data = await response.json();
     const content = data.choices?.[0]?.message?.content || "[]";
-
     const cleaned = content.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
 
     let questions: string[];
@@ -130,13 +131,8 @@ Deno.serve(async (req: Request) => {
         : [];
     }
 
-    return new Response(JSON.stringify({ questions }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return respond({ questions });
   } catch (error) {
-    return new Response(
-      JSON.stringify({ error: "Internal server error", details: String(error) }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+    return respond({ error: "Internal server error", details: String(error) }, 500);
   }
 });

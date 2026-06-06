@@ -60,13 +60,17 @@ Deno.serve(async (req: Request) => {
     return new Response(null, { status: 200, headers: corsHeaders });
   }
   try {
+    const authHeader = req.headers.get("Authorization") ?? "";
     const { topicId, action = "start", language = "nl" } = await req.json();
     if (!topicId) return respond({ error: "topicId is required" }, 400);
 
+    // User-scoped client — RLS ensures users only access their own data
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+      Deno.env.get("SUPABASE_ANON_KEY")!,
+      { global: { headers: { Authorization: authHeader } } }
     );
+
     const apiKey = Deno.env.get("OPENROUTER_API_KEY");
     if (!apiKey) return respond({ error: "OpenRouter API key not configured" }, 500);
 
@@ -79,7 +83,6 @@ Deno.serve(async (req: Request) => {
         .update({ status: "In Progress" })
         .eq("id", topicId);
 
-      // Load custom prompts
       const { data: promptRows } = await supabase
         .from("prompt_settings")
         .select("key, value")
@@ -169,7 +172,7 @@ async function runResearch(
         "Authorization": `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: model,
+        model,
         max_tokens: 4096,
         messages: [
           { role: "system", content: systemPrompt },
