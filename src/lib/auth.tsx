@@ -24,11 +24,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) {
+        const stored = sessionStorage.getItem('_uid');
+        if (stored && stored !== session.user.id) {
+          sessionStorage.clear();
+        }
+        sessionStorage.setItem('_uid', session.user.id);
+      }
       setSession(session);
       setLoading(false);
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (session?.user) {
+        const stored = sessionStorage.getItem('_uid');
+        if (stored && stored !== session.user.id) {
+          sessionStorage.clear();
+        }
+        sessionStorage.setItem('_uid', session.user.id);
+      } else if (event === 'SIGNED_OUT') {
+        sessionStorage.clear();
+      }
       setSession(session);
     });
 
