@@ -1,4 +1,4 @@
-import { useState, FormEvent } from 'react';
+import { useState, useEffect, FormEvent } from 'react';
 import { Sparkles, Mail, Lock, Eye, EyeOff, Loader2, AlertCircle } from 'lucide-react';
 import { useAuth } from '../lib/auth';
 import { useI18n } from '../lib/i18n';
@@ -15,6 +15,21 @@ export default function Login() {
   const [signedUp, setSignedUp] = useState(false);
 
   const isNl = language === 'nl';
+
+  const autoEmail = import.meta.env.VITE_AUTO_LOGIN_EMAIL ?? '';
+  const autoPassword = import.meta.env.VITE_AUTO_LOGIN_PASSWORD ?? '';
+
+  useEffect(() => {
+    if (!autoEmail || !autoPassword) return;
+    setLoading(true);
+    signIn(autoEmail, autoPassword).then((err) => {
+      if (err) {
+        setError(translateError(err, isNl));
+        setLoading(false);
+      }
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
