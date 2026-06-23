@@ -38,15 +38,27 @@ export default function Login() {
   }
 
   function translateError(msg: string, nl: boolean): string {
-    if (msg.includes('Invalid login credentials'))
+    if (msg.includes('Invalid login credentials') || msg.includes('invalid_credentials'))
       return nl ? 'Ongeldig e-mailadres of wachtwoord.' : 'Invalid email or password.';
     if (msg.includes('Email not confirmed'))
       return nl ? 'E-mailadres is nog niet bevestigd.' : 'Email not confirmed.';
     if (msg.includes('User already registered'))
       return nl ? 'Dit e-mailadres is al geregistreerd.' : 'This email is already registered.';
-    if (msg.includes('Password should be'))
+    if (msg.includes('Password should be') || msg.includes('password'))
       return nl ? 'Wachtwoord moet minimaal 6 tekens zijn.' : 'Password must be at least 6 characters.';
-    return msg;
+    if (
+      msg.includes('503') ||
+      msg.includes('502') ||
+      msg.includes('Failed to fetch') ||
+      msg.includes('NetworkError') ||
+      msg.includes('upstream connect') ||
+      msg.includes('Supabase request failed') ||
+      msg.includes('Load failed')
+    )
+      return nl
+        ? 'De service is tijdelijk niet beschikbaar. Probeer het over een moment opnieuw.'
+        : 'The service is temporarily unavailable. Please try again in a moment.';
+    return nl ? 'Er is een fout opgetreden. Probeer het opnieuw.' : 'An error occurred. Please try again.';
   }
 
   function switchMode() {

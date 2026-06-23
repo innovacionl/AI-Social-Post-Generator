@@ -23,17 +23,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user) {
-        const stored = sessionStorage.getItem('_uid');
-        if (stored && stored !== session.user.id) {
-          sessionStorage.clear();
+    supabase.auth.getSession()
+      .then(({ data: { session } }) => {
+        if (session?.user) {
+          const stored = sessionStorage.getItem('_uid');
+          if (stored && stored !== session.user.id) {
+            sessionStorage.clear();
+          }
+          sessionStorage.setItem('_uid', session.user.id);
         }
-        sessionStorage.setItem('_uid', session.user.id);
-      }
-      setSession(session);
-      setLoading(false);
-    });
+        setSession(session);
+      })
+      .catch(() => {
+        // Supabase unreachable — continue without a session
+      })
+      .finally(() => {
+        setLoading(false);
+      });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (session?.user) {
