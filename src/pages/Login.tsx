@@ -1,4 +1,4 @@
-import { useState, useEffect, FormEvent } from 'react';
+import { useState, FormEvent } from 'react';
 import { Sparkles, Mail, Lock, Eye, EyeOff, Loader2, AlertCircle } from 'lucide-react';
 import { useAuth } from '../lib/auth';
 import { useI18n } from '../lib/i18n';
@@ -16,40 +16,39 @@ export default function Login() {
 
   const isNl = language === 'nl';
 
-  const autoEmail = import.meta.env.VITE_AUTO_LOGIN_EMAIL ?? '';
-  const autoPassword = import.meta.env.VITE_AUTO_LOGIN_PASSWORD ?? '';
-
-  useEffect(() => {
-    if (!autoEmail || !autoPassword) return;
-    setLoading(true);
-    signIn(autoEmail, autoPassword).then((err) => {
-      if (err) {
-        setError(translateError(err, isNl));
-        setLoading(false);
-      }
-    });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     if (!email || !password) return;
     setLoading(true);
     setError('');
 
-    const err =
-      mode === 'signin'
-        ? await signIn(email, password)
-        : await signUp(email, password);
+    if (mode === 'signup') {
+      // Always report the same outcome so the form cannot be used to discover
+      // which email addresses already have an account.
+      const err = await signUp(email, password);
+      if (err && !isEnumerationError(err)) {
+        setError(translateError(err, isNl));
+      } else {
+        setSignedUp(true);
+      }
+      setLoading(false);
+      return;
+    }
 
+    const err = await signIn(email, password);
     if (err) {
       setError(translateError(err, isNl));
       setLoading(false);
-    } else if (mode === 'signup') {
-      setSignedUp(true);
-      setLoading(false);
     }
     // on signIn success, App.tsx will re-render via session change
+  }
+
+  function isEnumerationError(msg: string): boolean {
+    return (
+      msg.includes('User already registered') ||
+      msg.includes('already been registered') ||
+      msg.includes('user_already_exists')
+    );
   }
 
   function translateError(msg: string, nl: boolean): string {
@@ -57,8 +56,6 @@ export default function Login() {
       return nl ? 'Ongeldig e-mailadres of wachtwoord.' : 'Invalid email or password.';
     if (msg.includes('Email not confirmed'))
       return nl ? 'E-mailadres is nog niet bevestigd.' : 'Email not confirmed.';
-    if (msg.includes('User already registered'))
-      return nl ? 'Dit e-mailadres is al geregistreerd.' : 'This email is already registered.';
     if (msg.includes('Password should be') || msg.includes('password'))
       return nl ? 'Wachtwoord moet minimaal 6 tekens zijn.' : 'Password must be at least 6 characters.';
     if (

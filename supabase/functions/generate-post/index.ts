@@ -15,6 +15,35 @@ const languageNames: Record<string, string> = {
 
 const DEFAULT_MODEL = "openai/gpt-4o-mini";
 
+// Only models offered in the app's settings screen may be billed to our API key.
+const ALLOWED_MODELS = new Set([
+  "meta-llama/llama-3.1-8b-instruct",
+  "meta-llama/llama-3.1-70b-instruct",
+  "meta-llama/llama-3.3-70b-instruct",
+  "openai/gpt-4o-mini",
+  "openai/gpt-4o",
+  "openai/gpt-4.1-mini",
+  "anthropic/claude-3.5-sonnet",
+  "anthropic/claude-3-haiku",
+  "google/gemini-flash-1.5",
+  "google/gemini-pro-1.5",
+  "mistralai/mistral-7b-instruct",
+  "mistralai/mistral-nemo",
+]);
+
+function safeModel(value: unknown, fallback: string): string {
+  return typeof value === "string" && ALLOWED_MODELS.has(value) ? value : fallback;
+}
+
+const MAX_FIELD = 500;
+const MAX_STYLE = 2000;
+const MAX_TEMPLATE = 8000;
+const MAX_RESEARCH = 20000;
+
+function clamp(value: unknown, max: number): string {
+  return typeof value === "string" ? value.slice(0, max) : "";
+}
+
 const DEFAULT_SYSTEM = `You are an expert social media content creator. You craft viral, engaging posts from research insights.
 
 The user's chosen tone/style: {{tone}}
@@ -66,7 +95,12 @@ Deno.serve(async (req: Request) => {
 
   try {
     const authHeader = req.headers.get("Authorization") ?? "";
-    const { topicId, platform, tone, customStyle, language = "nl" } = await req.json();
+    const body = await req.json();
+    const topicId = clamp(body.topicId, 100);
+    const platform = body.platform === "twitter" ? "twitter" : body.platform === "linkedin" ? "linkedin" : "";
+    const tone = clamp(body.tone, MAX_FIELD).trim();
+    const customStyle = clamp(body.customStyle, MAX_STYLE);
+    const language = body.language === "en" ? "en" : "nl";
 
     if (!topicId || !platform || !tone) {
       return respond({ error: "topicId, platform, and tone are required" }, 400);
@@ -78,6 +112,12 @@ Deno.serve(async (req: Request) => {
       Deno.env.get("SUPABASE_ANON_KEY")!,
       { global: { headers: { Authorization: authHeader } } }
     );
+
+    // The anon key is public and satisfies verify_jwt on its own, so require a real user.
+    const { data: userData } = await supabase.auth.getUser();
+    if (!userData?.user) {
+      return respond({ error: "Unauthorized" }, 401);
+    }
 
     const { data: topic, error: fetchError } = await supabase
       .from("research_topics")
@@ -91,7 +131,7 @@ Deno.serve(async (req: Request) => {
 
     const apiKey = Deno.env.get("OPENROUTER_API_KEY");
     if (!apiKey) {
-      return respond({ error: "OpenRouter API key not configured" }, 500);
+      return respond({ error: "Service is not configured" }, 500);
     }
 
     const langName = languageNames[language] || "English";
@@ -114,21 +154,21 @@ Deno.serve(async (req: Request) => {
       ? "\n\nAdditional style instructions from the user:\n" + customStyle
       : "";
     const researchContext = topic.findings?.summary
-      ? "\nResearch Findings:\n" + topic.findings.summary
+      ? "\nResearch Findings:\n" + clamp(topic.findings.summary, MAX_RESEARCH)
       : "\nNo detailed research available - use the question itself as the basis for the posts.";
 
-    const systemPrompt = fill(custom.post_system ?? DEFAULT_SYSTEM, {
+    const systemPrompt = fill(clamp(custom.post_system, MAX_TEMPLATE) || DEFAULT_SYSTEM, {
       tone,
       customStyleSection,
       platformGuide,
       languageName: langName,
     });
 
-    const userPrompt = fill(custom.post_user ?? DEFAULT_USER, {
+    const userPrompt = fill(clamp(custom.post_user, MAX_TEMPLATE) || DEFAULT_USER, {
       platformLabel,
-      question: topic.question,
-      career: topic.career,
-      industry: topic.industry,
+      question: clamp(topic.question, MAX_FIELD),
+      career: clamp(topic.career, MAX_FIELD),
+      industry: clamp(topic.industry, MAX_FIELD),
       researchContext,
       tone,
       languageName: langName,
@@ -141,7 +181,7 @@ Deno.serve(async (req: Request) => {
         "Authorization": `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: custom.post_model ?? DEFAULT_MODEL,
+        model: safeModel(custom.post_model, DEFAULT_MODEL),
         max_tokens: 4096,
         messages: [
           { role: "system", content: systemPrompt },
@@ -151,8 +191,8 @@ Deno.serve(async (req: Request) => {
     });
 
     if (!response.ok) {
-      const errorText = await response.text();
-      return respond({ error: "OpenRouter API error: " + response.status, details: errorText }, 502);
+      console.error("OpenRouter error", response.status, await response.text());
+      return respond({ error: "The post generator is temporarily unavailable." }, 502);
     }
 
     const data = await response.json();
@@ -177,6 +217,7 @@ Deno.serve(async (req: Request) => {
 
     return respond({ variations });
   } catch (error) {
-    return respond({ error: "Internal server error", details: String(error) }, 500);
+    console.error("generate-post failed", error);
+    return respond({ error: "Internal server error" }, 500);
   }
 });

@@ -14,6 +14,33 @@ const languageNames: Record<string, string> = {
 
 const DEFAULT_MODEL = "meta-llama/llama-3.1-8b-instruct";
 
+// Only models offered in the app's settings screen may be billed to our API key.
+const ALLOWED_MODELS = new Set([
+  "meta-llama/llama-3.1-8b-instruct",
+  "meta-llama/llama-3.1-70b-instruct",
+  "meta-llama/llama-3.3-70b-instruct",
+  "openai/gpt-4o-mini",
+  "openai/gpt-4o",
+  "openai/gpt-4.1-mini",
+  "anthropic/claude-3.5-sonnet",
+  "anthropic/claude-3-haiku",
+  "google/gemini-flash-1.5",
+  "google/gemini-pro-1.5",
+  "mistralai/mistral-7b-instruct",
+  "mistralai/mistral-nemo",
+]);
+
+function safeModel(value: unknown, fallback: string): string {
+  return typeof value === "string" && ALLOWED_MODELS.has(value) ? value : fallback;
+}
+
+const MAX_FIELD = 500;
+const MAX_TEMPLATE = 8000;
+
+function clamp(value: unknown, max: number): string {
+  return typeof value === "string" ? value.slice(0, max) : "";
+}
+
 const DEFAULT_SYSTEM = `You are a research strategist who helps professionals identify high-value research questions relevant to their career and industry. Generate questions that are:
 - Timely and relevant to current trends (2024-2025)
 - Specific enough to research effectively
@@ -54,7 +81,11 @@ Deno.serve(async (req: Request) => {
   try {
     const authHeader = req.headers.get("Authorization") ?? "";
 
-    const { career, industry, topic, language = "nl" } = await req.json();
+    const body = await req.json();
+    const career = clamp(body.career, MAX_FIELD).trim();
+    const industry = clamp(body.industry, MAX_FIELD).trim();
+    const topic = clamp(body.topic, MAX_FIELD).trim();
+    const language = body.language === "en" ? "en" : "nl";
 
     if (!career || !industry) {
       return respond({ error: "Career and industry are required" }, 400);
@@ -62,7 +93,7 @@ Deno.serve(async (req: Request) => {
 
     const apiKey = Deno.env.get("OPENROUTER_API_KEY");
     if (!apiKey) {
-      return respond({ error: "OpenRouter API key not configured" }, 500);
+      return respond({ error: "Service is not configured" }, 500);
     }
 
     // User-scoped client — reads only this user's prompt_settings via RLS
@@ -71,6 +102,12 @@ Deno.serve(async (req: Request) => {
       Deno.env.get("SUPABASE_ANON_KEY")!,
       { global: { headers: { Authorization: authHeader } } }
     );
+
+    // The anon key is public and satisfies verify_jwt on its own, so require a real user.
+    const { data: userData } = await supabase.auth.getUser();
+    if (!userData?.user) {
+      return respond({ error: "Unauthorized" }, 401);
+    }
 
     const { data: promptRows } = await supabase
       .from("prompt_settings")
@@ -87,8 +124,11 @@ Deno.serve(async (req: Request) => {
       ? `They are specifically interested in exploring: "${topic}".`
       : "";
 
-    const systemPrompt = fill(custom.questions_system ?? DEFAULT_SYSTEM, { languageName: langName });
-    const userPrompt = fill(custom.questions_user ?? DEFAULT_USER, {
+    const systemPrompt = fill(
+      clamp(custom.questions_system, MAX_TEMPLATE) || DEFAULT_SYSTEM,
+      { languageName: langName },
+    );
+    const userPrompt = fill(clamp(custom.questions_user, MAX_TEMPLATE) || DEFAULT_USER, {
       career,
       industry,
       topicContext,
@@ -102,7 +142,7 @@ Deno.serve(async (req: Request) => {
         "Authorization": `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: custom.questions_model ?? DEFAULT_MODEL,
+        model: safeModel(custom.questions_model, DEFAULT_MODEL),
         max_tokens: 1024,
         messages: [
           { role: "system", content: systemPrompt },
@@ -112,8 +152,8 @@ Deno.serve(async (req: Request) => {
     });
 
     if (!response.ok) {
-      const errorText = await response.text();
-      return respond({ error: `OpenRouter API error: ${response.status}`, details: errorText }, 502);
+      console.error("OpenRouter error", response.status, await response.text());
+      return respond({ error: "The question generator is temporarily unavailable." }, 502);
     }
 
     const data = await response.json();
@@ -133,6 +173,7 @@ Deno.serve(async (req: Request) => {
 
     return respond({ questions });
   } catch (error) {
-    return respond({ error: "Internal server error", details: String(error) }, 500);
+    console.error("generate-questions failed", error);
+    return respond({ error: "Internal server error" }, 500);
   }
 });

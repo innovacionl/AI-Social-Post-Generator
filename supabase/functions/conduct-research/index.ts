@@ -15,6 +15,33 @@ const languageNames: Record<string, string> = {
 
 const DEFAULT_MODEL = "openai/gpt-4o-mini";
 
+// Only models offered in the app's settings screen may be billed to our API key.
+const ALLOWED_MODELS = new Set([
+  "meta-llama/llama-3.1-8b-instruct",
+  "meta-llama/llama-3.1-70b-instruct",
+  "meta-llama/llama-3.3-70b-instruct",
+  "openai/gpt-4o-mini",
+  "openai/gpt-4o",
+  "openai/gpt-4.1-mini",
+  "anthropic/claude-3.5-sonnet",
+  "anthropic/claude-3-haiku",
+  "google/gemini-flash-1.5",
+  "google/gemini-pro-1.5",
+  "mistralai/mistral-7b-instruct",
+  "mistralai/mistral-nemo",
+]);
+
+function safeModel(value: unknown, fallback: string): string {
+  return typeof value === "string" && ALLOWED_MODELS.has(value) ? value : fallback;
+}
+
+const MAX_FIELD = 500;
+const MAX_TEMPLATE = 8000;
+
+function clamp(value: unknown, max: number): string {
+  return typeof value === "string" ? value.slice(0, max) : "";
+}
+
 const DEFAULT_SYSTEM = `You are an expert research analyst. Write a thorough, well-structured research report based on your knowledge up to your training cutoff.
 
 IMPORTANT: Write the entire report in {{languageName}}. All headings, analysis, conclusions, and any references must be in {{languageName}}.
@@ -61,7 +88,10 @@ Deno.serve(async (req: Request) => {
   }
   try {
     const authHeader = req.headers.get("Authorization") ?? "";
-    const { topicId, action = "start", language = "nl" } = await req.json();
+    const body = await req.json();
+    const topicId = clamp(body.topicId, 100);
+    const action = body.action === "poll" || body.action === "status" ? body.action : "start";
+    const language = body.language === "en" ? "en" : "nl";
     if (!topicId) return respond({ error: "topicId is required" }, 400);
 
     // User-scoped client — RLS ensures users only access their own data
@@ -71,8 +101,12 @@ Deno.serve(async (req: Request) => {
       { global: { headers: { Authorization: authHeader } } }
     );
 
+    // The anon key is public and satisfies verify_jwt on its own, so require a real user.
+    const { data: userData } = await supabase.auth.getUser();
+    if (!userData?.user) return respond({ error: "Unauthorized" }, 401);
+
     const apiKey = Deno.env.get("OPENROUTER_API_KEY");
-    if (!apiKey) return respond({ error: "OpenRouter API key not configured" }, 500);
+    if (!apiKey) return respond({ error: "Service is not configured" }, 500);
 
     const { data: topic, error: fe } = await supabase
       .from("research_topics").select("*").eq("id", topicId).maybeSingle();
@@ -94,9 +128,9 @@ Deno.serve(async (req: Request) => {
 
       const { summary, error: researchError } = await runResearch(
         topic, apiKey, language,
-        custom.research_system ?? DEFAULT_SYSTEM,
-        custom.research_user ?? DEFAULT_USER,
-        custom.research_model ?? DEFAULT_MODEL,
+        clamp(custom.research_system, MAX_TEMPLATE) || DEFAULT_SYSTEM,
+        clamp(custom.research_user, MAX_TEMPLATE) || DEFAULT_USER,
+        safeModel(custom.research_model, DEFAULT_MODEL),
       );
 
       if (researchError || !summary) {
@@ -138,7 +172,8 @@ Deno.serve(async (req: Request) => {
 
     return respond({ error: "Invalid action" }, 400);
   } catch (e) {
-    return respond({ error: "Internal server error", details: String(e) }, 500);
+    console.error("conduct-research failed", e);
+    return respond({ error: "Internal server error" }, 500);
   }
 });
 
@@ -154,9 +189,9 @@ async function runResearch(
 
   const systemPrompt = fill(systemTemplate, { languageName: langName });
   const userPrompt = fill(userTemplate, {
-    question: topic.question,
-    career: topic.career,
-    industry: topic.industry,
+    question: String(topic.question ?? "").slice(0, MAX_FIELD),
+    career: String(topic.career ?? "").slice(0, MAX_FIELD),
+    industry: String(topic.industry ?? "").slice(0, MAX_FIELD),
     languageName: langName,
   });
 
@@ -184,8 +219,8 @@ async function runResearch(
     clearTimeout(timeoutId);
 
     if (!res.ok) {
-      const err = await res.text();
-      return { error: `OpenRouter ${res.status}: ${err}` };
+      console.error("OpenRouter error", res.status, await res.text());
+      return { error: "The research service is temporarily unavailable." };
     }
 
     const data = await res.json();
@@ -193,6 +228,7 @@ async function runResearch(
     if (!summary) return { error: "Model returned empty content" };
     return { summary };
   } catch (err: any) {
-    return { error: err?.name === "AbortError" ? "Request timed out" : String(err) };
+    console.error("runResearch failed", err);
+    return { error: err?.name === "AbortError" ? "Request timed out" : "Research could not be completed." };
   }
 }
